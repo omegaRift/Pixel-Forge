@@ -16,7 +16,7 @@ from tkinter import ttk
 
 from PIL import Image, ImageDraw, ImageTk
 
-from layers import (BASE_NAME, BLEND_MODES, MAX_LAYERS, History, Layer, blank, composite, faded,
+from layers import (ADJUSTMENTS, BASE_NAME, LAYER_MODES, MAX_LAYERS, History, Layer, blank, composite, faded,
                     flood_fill, line_pixels, merge_down, merge_visible, resize_layers)
 from ui_widgets import ScrollArea, Tooltip
 
@@ -204,8 +204,8 @@ class LayerEditorMixin:
         row = ttk.Frame(self.layer_panel, style="Panel.TFrame")
         row.pack(fill="x")
         ttk.Label(row, text="Blend", width=8).pack(side="left")
-        self.blend_box = ttk.Combobox(row, values=list(BLEND_MODES), state="readonly", font=("Consolas", 10),
-                                      width=max(len(m) for m in BLEND_MODES) + 1)  # room for the longest name
+        self.blend_box = ttk.Combobox(row, values=LAYER_MODES, state="readonly", font=("Consolas", 10),
+                                      width=max(len(m) for m in LAYER_MODES) + 1)  # room for the longest name
         self.blend_box.pack(side="left", fill="x", expand=True)
         self.blend_box.bind("<<ComboboxSelected>>", lambda e: self.set_blend_mode(self.blend_box.get()))
         self.blend_box.bind("<MouseWheel>", lambda e: "break")  # don't change mode by scrolling past it
@@ -373,6 +373,8 @@ class LayerEditorMixin:
         self.display_big = self.display_art.resize((PREVIEW_SIZE, PREVIEW_SIZE), Image.Resampling.NEAREST)
 
     def has_edits(self) -> bool:
+        if self.texture_mode and not self.session:  # opened as it is: only what was done to it counts
+            return bool(self.history.undo_stack)
         return len(self.layers) > 1 or any(not l.live for l in self.layers)
 
     def base_frozen(self) -> bool:
@@ -441,6 +443,7 @@ class LayerEditorMixin:
             # (a gradient layer fades with its own colours: "Fade to transparent")
             self.blend_toggle.state(["disabled"] if layer.gradient is not None else ["!disabled"])
         self._update_gradient_panel()  # a gradient layer selected (or not): show its settings
+        self._update_projection_ui()   # (projection_ui) its projected texture, if any
 
     def _layer_row(self, i: int):
         layer = self.layers[i]
@@ -461,7 +464,8 @@ class LayerEditorMixin:
         name = ttk.Label(row, text=layer.name, style=f"Row{sel}.TLabel")
         name.pack(side="left")
         tag = "live" if layer.live else ("edited" if layer.generated else "")
-        info = " ".join(x for x in (tag, "fade" if layer.fade is not None else "",
+        info = " ".join(x for x in (tag, "tex" if layer.projection is not None else "",
+                                    "fade" if layer.fade is not None else "",
                                     "" if layer.mode == "Normal" else layer.mode,
                                     "" if layer.opacity == 100 else f"{layer.opacity}%") if x)
         extra = ttk.Label(row, text=info, style=f"RowMuted{sel}.TLabel")
@@ -530,6 +534,11 @@ class LayerEditorMixin:
         i = self.active_layer
         if i <= 0:
             return
+        below = self.layers[i - 1]
+        if below.mode in ADJUSTMENTS:
+            self._set_status(f"'{below.name}' is a {below.mode} layer: it changes what's below it, so nothing "
+                             "can merge into it. Move this layer under it, or use Merge All.")
+            return
         self._snapshot()
         if self.layers[i - 1].live:
             self._freeze(self.layers[i - 1])
@@ -560,9 +569,25 @@ class LayerEditorMixin:
 
     def set_blend_mode(self, mode: str):
         layer = self.layers[self.active_layer]
-        if mode in BLEND_MODES and mode != layer.mode:
+        if mode in ADJUSTMENTS and self.active_layer == 0:
+            self.blend_box.set(layer.mode)
+            self._set_status(f"{mode} changes the layers below it, and '{layer.name}' is at the bottom: "
+                             f"add a layer above it (+) and set that one to {mode}.")
+            return
+        if mode in LAYER_MODES and mode != layer.mode:
             self._snapshot()
             layer.mode = mode
+            if mode in ADJUSTMENTS:
+                # It changes what's below wherever it has pixels: an empty layer would do
+                # nothing, so it's filled - everything beneath at once; erase to spare parts.
+                filled = layer.gradient is None and layer.image.getchannel("A").getbbox() is None
+                if filled:
+                    self._freeze(layer)
+                    layer.image = Image.new("RGBA", layer.image.size, (128, 128, 128, 255))
+                self._status_note = (f"'{layer.name}' turns everything beneath it {mode.lower()}" +
+                                     (" (it was empty, so it covers it all: erase parts to keep their colour)."
+                                      if filled else " wherever it has pixels; its own colours don't matter."))
+                self._set_status(self._status_note)
             self._layers_changed()
 
     def _on_opacity(self, value):
@@ -630,19 +655,24 @@ class LayerEditorMixin:
         Pixel Art tab in Edit mode. With the Gradient tool it's the
         gradient's start colour instead."""
         rgba = self._swatch_at(event.x, event.y)
-        if rgba is None:
-            return
-        if self.tool_var.get() == "gradient":
-            self._gradient_palette_pick(0, rgba)
-            return
-        self.set_paint_colour(rgba)
-        self.select_tool("pen")
+        if rgba is not None:
+            self._pick_swatch(rgba, 0)
 
     def _on_palette_right_click(self, event):
         """With the Gradient tool: the gradient's end colour."""
         rgba = self._swatch_at(event.x, event.y)
-        if rgba is not None and self.tool_var.get() == "gradient":
-            self._gradient_palette_pick(1, rgba)
+        if rgba is not None:
+            self._pick_swatch(rgba, 1)
+
+    def _pick_swatch(self, rgba, end: int):
+        """A swatch clicked (end 0) or right-clicked (end 1), in the sprite's
+        palette or a library palette: paint with it (Pen), or with the
+        Gradient tool set the gradient's start / end colour."""
+        if self.tool_var.get() == "gradient":
+            self._gradient_palette_pick(end, rgba)
+        elif end == 0:
+            self.set_paint_colour(rgba)
+            self.select_tool("pen")
 
     def _pixel_at(self, x, y):
         ox, oy, k = self._art_origin

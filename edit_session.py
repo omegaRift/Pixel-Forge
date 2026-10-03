@@ -256,7 +256,8 @@ class EditSessionMixin:
         self.layers = [Layer("Texture", img.copy())]  # not "live": settings never overwrite it
         self.active_layer = 0
         size = img.width
-        self.art_title.configure(text=f"{size}x{size} texture  ·  editing as-is")
+        self.art_title.configure(text=f"{size}x{size} texture  ·  " +
+                                 ("editing as-is" if self.session else "opened as-is"))
         self.orig_title.configure(text="Before your edits")
         self._disable_generation()
         self._refresh_display()
@@ -265,22 +266,40 @@ class EditSessionMixin:
         self._draw_art()
         self._draw_palette()
         self._refresh_layer_panel()
-        self._set_status(f"Editing {path.name} for {self.session['caller']}  ·  "
-                         "Save & Return writes it back, Cancel leaves it unchanged")
+        if self.session:
+            self._set_status(f"Editing {path.name} for {self.session['caller']}  ·  "
+                             "Save & Return writes it back, Cancel leaves it unchanged")
+        else:
+            self._set_status(f"Opened {path.name} as it is ({size}x{size}, no conversion)  ·  "
+                             "Save Sprite saves it at its own size")
 
     def _disable_generation(self):
         """Generation settings (and Match Original) don't apply to an
-        existing texture: hide them and say why in the Adjustments area."""
+        existing texture: hide them and say why in the Adjustments area.
+        _enable_generation puts them back (opening a picture to convert)."""
         inner = self.adjust_area.inner
-        for child in inner.winfo_children():
-            child.pack_forget()
+        if not getattr(self, "_generation_hidden", None):
+            # Remember the converter's sections and how they were packed.
+            keep = (getattr(self, "gradient_panel", None), getattr(self, "projection_panel", None))
+            self._generation_hidden = [(child, child.pack_info()) for child in inner.pack_slaves()
+                                       if child not in keep]
+            for child, _ in self._generation_hidden:
+                child.pack_forget()
+        for widget in getattr(self, "_texture_widgets", []):
+            widget.destroy()
+        before = set(inner.winfo_children())
         self.match_btn.place_forget()
         ttk.Label(inner, text="TEXTURE", style="Head.TLabel").pack(anchor="w")
         ttk.Label(inner, style="Muted.TLabel", justify="left", wraplength=250,
-                  text="You're editing an existing texture, so the generation settings "
-                       "are off: it opens exactly as it is.\n\n"
-                       "Paint with the tools on the left, add layers below, then "
-                       "Save & Return (Ctrl+S) to send it back.").pack(anchor="w", pady=(8, 0))
+                  text=("You're editing an existing texture, so the generation settings "
+                        "are off: it opens exactly as it is.\n\n"
+                        "Paint with the tools on the left, add layers below, then "
+                        "Save & Return (Ctrl+S) to send it back.") if self.session else
+                       ("Opened as it is: no conversion, pixel for pixel, so the "
+                        "generation settings are off.\n\n"
+                        "Paint with the tools on the left, add layers below, then "
+                        "Save Sprite (Ctrl+Shift+S) to save it at its own size. "
+                        "Open... converts a picture again.")).pack(anchor="w", pady=(8, 0))
         # Remove BG, on the selected layer (the converter's own is off here)
         ttk.Label(inner, text="BACKGROUND", style="Head.TLabel").pack(anchor="w", pady=(16, 0))
         row = ttk.Frame(inner, style="Panel.TFrame")
@@ -298,6 +317,19 @@ class EditSessionMixin:
         ttk.Label(inner, style="Muted.TLabel", justify="left", wraplength=250,
                   text="Makes the selected layer's background see-through, "
                        "pixel by pixel. Ctrl+Z undoes it.").pack(anchor="w", pady=(8, 0))
+        self._texture_widgets = [w for w in inner.winfo_children() if w not in before]
+
+    def _enable_generation(self):
+        """Undo _disable_generation: the converter's sections come back as
+        they were, and so does Match Original."""
+        for widget in getattr(self, "_texture_widgets", []):
+            widget.destroy()
+        self._texture_widgets = []
+        for child, info in getattr(self, "_generation_hidden", None) or []:
+            child.pack(**info)
+        self._generation_hidden = None
+        self.match_btn.place(relx=1.0, x=0, y=0, anchor="ne")
+        self.match_btn.lift()
 
     _bg_job = None  # a Remove BG running on a worker thread (AI)
 

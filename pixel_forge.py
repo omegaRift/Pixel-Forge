@@ -26,6 +26,8 @@ from PIL import Image, ImageTk
 from edit_session import (DESCRIPTION, EXIT_ERROR, EditSessionMixin, parse_args, write_result)
 from editor_ui import LayerEditorMixin, checkerboard
 from gradient_ui import GradientMixin
+from palette_ui import PaletteLibraryMixin
+from projection_ui import ProjectionMixin
 from mc_preview import best_fit, pretty_name, render_inventory
 from ui_widgets import ScrollArea, Tooltip
 from pixel_core import (GRID_OPTIONS, PREVIEW_SIZE, ai_status, auto_line_color, find_subject,
@@ -58,6 +60,8 @@ LAUNCHER_EXE = Path(os.environ.get("PIXEL_FORGE_LAUNCHER") or APP_DIR / "Pixel F
 APP_ID = "PixelForge.Desktop"                    # Windows taskbar identity
 
 FILE_TYPES = [("Images", "*.png *.jpg *.jpeg"), ("PNG", "*.png"), ("JPEG", "*.jpg *.jpeg")]
+AS_IS_TYPES = [("Images", "*.png *.gif *.bmp *.webp *.jpg *.jpeg"), ("PNG", "*.png"), ("All files", "*.*")]
+MAX_AS_IS = 256  # the biggest (square) picture Open As-Is takes, as Grass Block's textures
 
 # A classic space invader, used for the window icon and the header logo.
 INVADER = [
@@ -141,8 +145,9 @@ def texture_id(name: str) -> str:
 # The app
 # --------------------------------------------------------------------------
 
-class PixelForgeApp(EditSessionMixin, GradientMixin, LayerEditorMixin):
-    # Edit view: editor_ui.py, gradients: gradient_ui.py, --edit sessions: edit_session.py
+class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, ProjectionMixin, LayerEditorMixin):
+    # Edit view: editor_ui.py, gradients: gradient_ui.py, palette library: palette_ui.py,
+    # texture projection: projection_ui.py, --edit sessions: edit_session.py
     def __init__(self, root: tk.Tk):
         self.root = root
         self.original: Image.Image | None = None
@@ -202,6 +207,8 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, LayerEditorMixin):
         self._style()
         self._build()
         self._build_editor_ui()
+        self._build_palette_library()
+        self._build_projection_ui()
         self._bind_keys()
 
     # ---- theme -----------------------------------------------------------
@@ -404,8 +411,11 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, LayerEditorMixin):
         ttk.Label(bar, image=self._logo).pack(side="left", padx=(0, 6))
         ttk.Label(bar, text="PIXEL FORGE", style="Head.TLabel").pack(side="left", padx=(0, 16))
 
-        ttk.Button(bar, text="Open...", style="Accent.TButton", width=8,
-                   command=self.open_dialog).pack(side="left", padx=(0, 4))
+        open_btn = ttk.Button(bar, text="Open...", style="Accent.TButton", width=8, command=self.open_dialog)
+        open_btn.pack(side="left", padx=(0, 4))
+        Tooltip(open_btn, "Open a picture to make pixel art from (Ctrl+O).\n"
+                          "Small square pictures: you're asked whether to open them as they are.\n"
+                          "Ctrl+Shift+O opens pixel art as it is, no conversion.")
         self.save_btn = ttk.Button(bar, text="Save Art", state="disabled", width=9,
                                    command=lambda: self.save_dialog(raw=False))
         self.save_btn.pack(side="left", padx=(0, 4))
@@ -537,7 +547,7 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, LayerEditorMixin):
         """Mouse wheel over a scrolling sidebar area scrolls it. Other wheel
         uses (scaling the sprite on its canvas) have their own bindings."""
         widget = self.root.winfo_containing(event.x_root, event.y_root)
-        for area in (self.adjust_area, getattr(self, "layer_area", None)):
+        for area in (self.adjust_area, getattr(self, "layer_area", None), getattr(self, "_lib_area", None)):
             if area is not None and area.contains(widget):
                 area.scroll(-1 if event.delta > 0 else 1)
                 return
@@ -569,6 +579,7 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, LayerEditorMixin):
 
     def _bind_keys(self):
         self.root.bind("<Control-o>", lambda e: self.open_dialog())
+        self.root.bind("<Control-O>", lambda e: self.open_as_is())  # Ctrl+Shift+O: pixel art, as it is
         # In an edit session Ctrl+S is Save & Return.
         self.root.bind("<Control-s>", lambda e: self.session_save() if self.session else self.save_dialog(raw=False))
         self.root.bind("<Control-S>", lambda e: self.session or self.save_dialog(raw=True))  # Ctrl+Shift+S
@@ -830,8 +841,66 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, LayerEditorMixin):
         if self.session:  # an edit session is about its one texture
             return
         path = filedialog.askopenfilename(title="Open an image", filetypes=FILE_TYPES)
-        if path:
-            self.load_image(path)
+        if not path:
+            return
+        size = self._pixel_art_size(path)
+        if size:  # small and square: probably pixel art already - ask how to open it
+            choice = messagebox.askyesnocancel(
+                "Pixel Forge", f"{Path(path).name} is {size}x{size}: it may be pixel art already.\n\n"
+                               "Yes: open it as it is (no conversion, pixel for pixel)\n"
+                               "No: convert it like any picture")
+            if choice is None:
+                return
+            if choice:
+                self.open_as_is(path)
+                return
+        self.load_image(path)
+
+    AS_IS_ASK = 128  # square pictures up to this size: Open... asks whether to keep them as they are
+
+    @staticmethod
+    def _pixel_art_size(path) -> int:
+        """The side of a small square picture (up to AS_IS_ASK), else 0."""
+        try:
+            with Image.open(path) as img:
+                w, h = img.size
+        except Exception:
+            return 0
+        return w if w == h <= PixelForgeApp.AS_IS_ASK else 0
+
+    def open_as_is(self, path=None) -> bool:
+        """Open a picture that's already pixel art exactly as it is: one
+        layer, pixel for pixel, no conversion (Ctrl+Shift+O)."""
+        if self.session:
+            return False
+        if path is None:
+            path = filedialog.askopenfilename(title="Open pixel art as it is", filetypes=AS_IS_TYPES)
+            if not path:
+                return False
+        path = Path(path)
+        try:
+            img = Image.open(path)
+            img.seek(0)  # an animation: its first frame
+            img = img.convert("RGBA")
+        except Exception as exc:
+            messagebox.showerror("Pixel Forge", f"Couldn't open that file as an image:\n\n{exc}")
+            return False
+        w, h = img.size
+        if w != h or w > MAX_AS_IS:
+            messagebox.showerror("Pixel Forge", f"{path.name} is {w}x{h}. Only square pictures up to "
+                                                f"{MAX_AS_IS}x{MAX_AS_IS} open as they are.\n\n"
+                                                "Use Open... to convert it into pixel art instead.")
+            return False
+        if self.has_edits() and not messagebox.askyesno(
+                "Pixel Forge", "Opening another image discards your layers and painting.\n\nContinue?"):
+            return False
+        self.open_texture(path, img)  # (edit_session: one "Texture" layer, generation settings off)
+        self.item_name.set(pretty_name(path.stem))
+        self.save_btn.configure(state="normal")
+        self.save_raw_btn.configure(state="normal")
+        self.root.title(f"Pixel Forge - {path.name} (as it is)")
+        self._draw_game()
+        return True
 
     def load_image(self, path) -> bool:
         path = Path(path)
@@ -844,6 +913,10 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, LayerEditorMixin):
         if self.has_edits() and not messagebox.askyesno(
                 "Pixel Forge", "Opening another image discards your layers and painting.\n\nContinue?"):
             return False
+        if self.texture_mode and not self.session:  # the last one was opened as it is
+            self.texture_mode = False
+            self._enable_generation()
+            self.orig_title.configure(text="Source image")
         self.reset_layers()  # layers belong to the old image
         self.zoom, self.pan = None, [0, 0]  # and so does the zoom: start fitted
         self.original, self.source_path, self.region = img, path, None
