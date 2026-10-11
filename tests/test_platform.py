@@ -66,10 +66,19 @@ assert "<MouseWheel>" in root.bind_all()
 print("mouse wheel:", "buttons 4/5 give delta +120/-120" if x11 else "<MouseWheel> (this system sends it itself)")
 
 # 4. The window fits the screen (a Steam Deck is 1280x800)
+def settle(window):
+    """Let a window take its size: X11 reports 1x1 until it is shown (on Linux
+    this runs on a virtual screen, so showing it is invisible)."""
+    if x11:
+        window.deiconify()
+        root.update()
+    window.update_idletasks()
+
+
 top = tk.Toplevel(root)
 top.withdraw()
 ps.fit_window(top, 1140, 800, 900, 720)
-top.update_idletasks()
+settle(top)
 w, h = (int(v) for v in top.geometry().split("+")[0].split("x"))
 sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
 assert w == min(1140, sw - 20) and h == min(800, sh - 80), (w, h, sw, sh)
@@ -77,7 +86,8 @@ assert top.minsize() == (min(900, w), min(720, h))
 huge = tk.Toplevel(root)
 huge.withdraw()
 ps.fit_window(huge, 5000, 5000, 4000, 4000)  # asking for more than any screen has
-huge.update_idletasks()
+settle(huge)
+assert ps.pt(10) == (10 if ps.WINDOWS or sys.platform == "darwin" else 9) and ps.pt(22) in (22, 20)
 w2, h2 = (int(v) for v in huge.geometry().split("+")[0].split("x"))
 assert (w2, h2) == (sw - 20, sh - 80) and huge.minsize() == (w2, h2), (w2, h2, huge.minsize())
 print(f"window: {w}x{h} on this {sw}x{sh} screen; never bigger than the screen has room for")

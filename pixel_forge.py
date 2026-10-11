@@ -28,7 +28,7 @@ from edit_session import (DESCRIPTION, EXIT_ERROR, EditSessionMixin, parse_args,
 from editor_ui import LayerEditorMixin, checkerboard
 from gradient_ui import GradientMixin
 from palette_ui import PaletteLibraryMixin
-from platform_support import MONO, bind_wheel, config_dir, fit_window, open_folder, use_bundled_fonts
+from platform_support import MONO, bind_wheel, config_dir, fit_window, open_folder, pt, use_bundled_fonts
 from projection_ui import ProjectionMixin
 from mc_preview import best_fit, pretty_name, render_inventory
 from ui_widgets import ScrollArea, Tooltip
@@ -49,10 +49,10 @@ ACCENT = "#ff3e7f"    # hot pink
 ACCENT_HI = "#ff6b9d"
 CYAN = "#3ef0ff"
 
-FONT = (MONO, 10)
-FONT_BOLD = (MONO, 10, "bold")
-FONT_HEAD = (MONO, 12, "bold")
-FONT_TITLE = (MONO, 22, "bold")
+FONT = (MONO, pt(10))
+FONT_BOLD = (MONO, pt(10), "bold")
+FONT_HEAD = (MONO, pt(12), "bold")
+FONT_TITLE = (MONO, pt(22), "bold")
 
 APP_DIR = Path(__file__).resolve().parent
 FORGE_ICO = APP_DIR / "forge.ico"                # app + launcher icon (built from Forge.png)

@@ -17,6 +17,13 @@ WINDOWS = sys.platform == "win32"
 MONO = "Consolas" if WINDOWS else "Menlo" if sys.platform == "darwin" else "DejaVu Sans Mono"
 
 
+def pt(size: int) -> int:
+    """A font size for this system. The layout is designed around Consolas;
+    DejaVu Sans Mono is about a tenth wider at the same size, so on Linux
+    sizes are a tenth smaller (10 -> 9) and the text takes the same room."""
+    return size if WINDOWS or sys.platform == "darwin" else round(size * 0.9)
+
+
 def use_bundled_fonts(app_dir: Path) -> bool:
     """Linux, before Tk starts: make the fonts in <app_dir>/fonts (the
     packaged app has them) available to this process only, by pointing
