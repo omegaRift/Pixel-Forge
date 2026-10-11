@@ -161,8 +161,8 @@ class PaletteLibraryMixin:
         top.title("Palette Library - Pixel Forge")
         top.configure(bg=BG)
         top.transient(self.root)
-        top.geometry("520x460")
-        top.minsize(420, 320)
+        top.geometry(f"{round(520 * self.ui_scale)}x460")
+        top.minsize(round(420 * self.ui_scale), 320)
         top.protocol("WM_DELETE_WINDOW", self.close_palette_library)
         top.bind("<Escape>", lambda e: self.close_palette_library())
 

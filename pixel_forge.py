@@ -28,7 +28,8 @@ from edit_session import (DESCRIPTION, EXIT_ERROR, EditSessionMixin, parse_args,
 from editor_ui import LayerEditorMixin, checkerboard
 from gradient_ui import GradientMixin
 from palette_ui import PaletteLibraryMixin
-from platform_support import MONO, bind_wheel, config_dir, fit_window, open_folder, pt, use_bundled_fonts
+from platform_support import (MONO, bind_wheel, config_dir, fit_window, open_folder, use_bundled_fonts,
+                              width_scale)
 from projection_ui import ProjectionMixin
 from mc_preview import best_fit, pretty_name, render_inventory
 from ui_widgets import ScrollArea, Tooltip
@@ -49,10 +50,10 @@ ACCENT = "#ff3e7f"    # hot pink
 ACCENT_HI = "#ff6b9d"
 CYAN = "#3ef0ff"
 
-FONT = (MONO, pt(10))
-FONT_BOLD = (MONO, pt(10), "bold")
-FONT_HEAD = (MONO, pt(12), "bold")
-FONT_TITLE = (MONO, pt(22), "bold")
+FONT = (MONO, 10)
+FONT_BOLD = (MONO, 10, "bold")
+FONT_HEAD = (MONO, 12, "bold")
+FONT_TITLE = (MONO, 22, "bold")
 
 APP_DIR = Path(__file__).resolve().parent
 FORGE_ICO = APP_DIR / "forge.ico"                # app + launcher icon (built from Forge.png)
@@ -197,7 +198,9 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, Projec
 
         root.title("Pixel Forge")
         root.configure(bg=BG)
-        fit_window(root, 1140, 800, 900, 720)  # (less on a small screen, such as a Steam Deck's)
+        # The layout's fixed widths were drawn for Consolas; a wider font gets wider ones.
+        self.ui_scale = width_scale(tkfont.Font(root=root, font=FONT).measure("0"))
+        fit_window(root, round(1140 * self.ui_scale), 800, round(900 * self.ui_scale), 720)  # (less on a small screen)
         self._icon = ImageTk.PhotoImage(make_invader(4))  # the header logo
         # Window + taskbar icon: the forge anvil (same icon as the launcher).
         try:
@@ -461,7 +464,7 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, Projec
             LAYERS       anchored at the bottom (built by editor_ui, packed
                          *before* Adjustments so it always gets its room)
         """
-        side = ttk.Frame(parent, style="Panel.TFrame", padding=12, width=300)
+        side = ttk.Frame(parent, style="Panel.TFrame", padding=12, width=round(300 * self.ui_scale))
         side.pack(side="right", fill="y")
         side.pack_propagate(False)
         self.right_sidebar = side

@@ -87,7 +87,7 @@ huge = tk.Toplevel(root)
 huge.withdraw()
 ps.fit_window(huge, 5000, 5000, 4000, 4000)  # asking for more than any screen has
 settle(huge)
-assert ps.pt(10) == (10 if ps.WINDOWS or sys.platform == "darwin" else 9) and ps.pt(22) in (22, 20)
+assert ps.width_scale(7) == 1.0 and ps.width_scale(6) == 1.0 and abs(ps.width_scale(8) - 8 / 7) < 1e-9
 w2, h2 = (int(v) for v in huge.geometry().split("+")[0].split("x"))
 assert (w2, h2) == (sw - 20, sh - 80) and huge.minsize() == (w2, h2), (w2, h2, huge.minsize())
 print(f"window: {w}x{h} on this {sw}x{sh} screen; never bigger than the screen has room for")

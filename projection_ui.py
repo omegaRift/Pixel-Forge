@@ -18,7 +18,7 @@ from tkinter import filedialog, messagebox, ttk
 from PIL import Image, ImageTk
 
 from layers import BLEND_MODES, default_projection
-from platform_support import MONO, bind_wheel, pt
+from platform_support import MONO, bind_wheel
 from ui_widgets import Tooltip
 
 # Theme colours (kept in sync with pixel_forge's palette)
@@ -91,7 +91,7 @@ class ProjectionMixin:
         row = ttk.Frame(p, style="Panel.TFrame")
         row.pack(fill="x", pady=(8, 0))
         ttk.Label(row, text="Mix", width=8).pack(side="left")
-        self.proj_mode_box = ttk.Combobox(row, values=list(BLEND_MODES), state="readonly", font=(MONO, pt(10)),
+        self.proj_mode_box = ttk.Combobox(row, values=list(BLEND_MODES), state="readonly", font=(MONO, 10),
                                           width=max(len(m) for m in BLEND_MODES) + 1)
         self.proj_mode_box.pack(side="left", fill="x", expand=True)
         self.proj_mode_box.bind("<<ComboboxSelected>>", lambda e: self._proj_set(mode=self.proj_mode_box.get()))

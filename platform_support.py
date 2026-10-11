@@ -16,12 +16,15 @@ WINDOWS = sys.platform == "win32"
 # on every system; from source, fontconfig substitutes if it isn't installed.
 MONO = "Consolas" if WINDOWS else "Menlo" if sys.platform == "darwin" else "DejaVu Sans Mono"
 
+DESIGN_CHAR_WIDTH = 7  # px: one character of Consolas 10, which the layout's fixed widths were drawn for
 
-def pt(size: int) -> int:
-    """A font size for this system. The layout is designed around Consolas;
-    DejaVu Sans Mono is about a tenth wider at the same size, so on Linux
-    sizes are a tenth smaller (10 -> 9) and the text takes the same room."""
-    return size if WINDOWS or sys.platform == "darwin" else round(size * 0.9)
+
+def width_scale(char_width: int) -> float:
+    """How much wider than designed the fixed-width parts of the layout (the
+    sidebar, the smallest window) must be for this system's font: DejaVu
+    Sans Mono on Linux is 8 px a character where Consolas is 7. Never
+    narrower than designed."""
+    return max(1.0, char_width / DESIGN_CHAR_WIDTH)
 
 
 def use_bundled_fonts(app_dir: Path) -> bool:

@@ -30,7 +30,7 @@ app.load_image(axe); app.transparent_var.set(True); app._settings_changed(); pum
 side = app.right_sidebar
 y = lambda w: w.winfo_rooty() - side.winfo_rooty()
 assert y(app.palette_canvas) < y(app.adjust_area) < y(app.layer_panel), "palette / adjustments / layers"
-assert side.winfo_width() == 300
+assert side.winfo_width() == round(300 * app.ui_scale)  # (300 px with Consolas; wider for a wider font)
 bottom = y(app.layer_panel) + app.layer_panel.winfo_height()
 assert bottom <= side.winfo_height(), ("layers fully visible", bottom, side.winfo_height())
 assert app.layer_panel.winfo_ismapped() and app.view_var.get() == "sprite", "layers visible in Sprite view too"
