@@ -28,6 +28,7 @@ from edit_session import (DESCRIPTION, EXIT_ERROR, EditSessionMixin, parse_args,
 from editor_ui import LayerEditorMixin, checkerboard
 from gradient_ui import GradientMixin
 from palette_ui import PaletteLibraryMixin
+from platform_support import MONO, bind_wheel, config_dir, fit_window, open_folder, use_bundled_fonts
 from projection_ui import ProjectionMixin
 from mc_preview import best_fit, pretty_name, render_inventory
 from ui_widgets import ScrollArea, Tooltip
@@ -48,10 +49,10 @@ ACCENT = "#ff3e7f"    # hot pink
 ACCENT_HI = "#ff6b9d"
 CYAN = "#3ef0ff"
 
-FONT = ("Consolas", 10)
-FONT_BOLD = ("Consolas", 10, "bold")
-FONT_HEAD = ("Consolas", 12, "bold")
-FONT_TITLE = ("Consolas", 22, "bold")
+FONT = (MONO, 10)
+FONT_BOLD = (MONO, 10, "bold")
+FONT_HEAD = (MONO, 12, "bold")
+FONT_TITLE = (MONO, 22, "bold")
 
 APP_DIR = Path(__file__).resolve().parent
 FORGE_ICO = APP_DIR / "forge.ico"                # app + launcher icon (built from Forge.png)
@@ -97,9 +98,9 @@ def make_invader(scale: int) -> Image.Image:
 # --------------------------------------------------------------------------
 
 def settings_file() -> Path:
-    """%APPDATA%\\PixelForge\\settings.json (the user's own config folder)."""
-    base = os.environ.get("APPDATA") or str(Path.home())
-    return Path(base) / "PixelForge" / "settings.json"
+    """settings.json in the user's own config folder (%APPDATA%\\PixelForge on
+    Windows, ~/.config/PixelForge on Linux)."""
+    return config_dir() / "settings.json"
 
 
 def load_settings() -> dict:
@@ -196,8 +197,7 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, Projec
 
         root.title("Pixel Forge")
         root.configure(bg=BG)
-        root.geometry("1140x800")
-        root.minsize(900, 720)
+        fit_window(root, 1140, 800, 900, 720)  # (less on a small screen, such as a Steam Deck's)
         self._icon = ImageTk.PhotoImage(make_invader(4))  # the header logo
         # Window + taskbar icon: the forge anvil (same icon as the launcher).
         try:
@@ -599,8 +599,8 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, Projec
         self.root.bind("<Control-minus>", lambda e: self.set_scale(self.scale_var.get() - 5))
         self.root.bind("<Control-0>", lambda e: self.reset_transform())
         self.root.bind("<Control-m>", lambda e: self.match_original())
-        self.art_canvas.bind("<MouseWheel>", self._on_wheel)
-        self.root.bind_all("<MouseWheel>", self._on_global_wheel, add="+")  # sidebar scrolling
+        bind_wheel(self.art_canvas, self._on_wheel)
+        bind_wheel(self.root, self._on_global_wheel, everywhere=True, add="+")  # sidebar scrolling
         # Left button: the current tool (Move drags the subject, the paint
         # tools paint, Zoom zooms in; double-click with Zoom fits).
         self.art_canvas.bind("<ButtonPress-1>", self._on_drag_start)
@@ -1015,7 +1015,7 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, Projec
 
     def open_export_dir(self):
         if self.export_dir and self.export_dir.is_dir():
-            os.startfile(self.export_dir)  # opens it in Explorer
+            open_folder(self.export_dir)  # in Explorer / the file manager
 
     def _show_export_dir(self):
         """Folder button text: the export folder's own name (shortened if
@@ -1353,9 +1353,11 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, Projec
 # --------------------------------------------------------------------------
 
 def _windows_setup():
-    """Make the window crisp on high-DPI screens and give it its own
-    taskbar identity (otherwise it shows up as 'python')."""
+    """Before the window exists. Windows: make it crisp on high-DPI screens
+    and give it its own taskbar identity (otherwise it shows up as
+    'python'). Linux: use the app's own font if it carries one."""
     if sys.platform != "win32":
+        use_bundled_fonts(APP_DIR)
         return
     import ctypes
     try:

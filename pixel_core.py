@@ -8,6 +8,7 @@ Pure Pillow, no UI code, no network access.
 import importlib.util
 import io
 import os
+import sys
 from collections import Counter, deque
 from pathlib import Path
 from typing import NamedTuple
@@ -543,10 +544,14 @@ def ai_model_loaded() -> bool:
 
 def ai_status() -> str | None:
     """None when AI removal is ready to use, otherwise why it isn't."""
+    if getattr(sys, "frozen", False) and importlib.util.find_spec("rembg") is None:
+        return "AI background removal isn't part of this build of Pixel Forge. Plain removal works as usual."
+    how = ("Run install-ai.bat once (needs internet)." if sys.platform == "win32" else
+           "Install it once with: pip install -r requirements-ai.txt (needs internet).")
     if importlib.util.find_spec("rembg") is None:
-        return "AI removal isn't installed. Run install-ai.bat once (needs internet)."
+        return f"AI removal isn't installed. {how}"
     if not AI_MODEL_FILE.exists():
-        return "The AI model is missing. Run install-ai.bat once (needs internet)."
+        return f"The AI model is missing. {how}"
     return None
 
 

@@ -1,0 +1,102 @@
+# Tests Pixel Forge on Linux and builds the one-file app for Linux / the Steam Deck.
+#
+# - every push to main or linux: run the test suites on a virtual screen, build the
+#   app, and check that the built app really opens, edits and saves a texture;
+# - a tag like v1.2.0: also publish the app on the repository's Releases page.
+name: Linux build
+
+on:
+  push:
+    branches: [main, linux]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # to publish a release from a tag
+
+jobs:
+  linux:
+    runs-on: ubuntu-22.04   # an older system on purpose: what's built here runs on newer ones (SteamOS)
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: System packages (Tk, a virtual screen, the app's font)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb tk8.6 libtk8.6 fonts-dejavu-core
+
+      - name: Python packages
+        run: python -m pip install -r requirements.txt pyinstaller
+
+      - name: Tests, on a virtual screen
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" python tests/run_all.py
+
+      - name: Keep the tests' screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-screenshots
+          path: /tmp/pixel-forge-tests/**/*.png
+          if-no-files-found: ignore
+
+      - name: Build the app (one file, Python and its font included)
+        run: |
+          mkdir -p build-fonts
+          cp /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf /usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf build-fonts/
+          pyinstaller --noconfirm --onefile --windowed --name PixelForge \
+            --add-data "Forge.png:." --add-data "forge.ico:." --add-data "build-fonts:fonts" \
+            pixel_forge.py
+          ls -lh dist/PixelForge
+
+      - name: Check the built app (describe, then open a texture, paint it and save)
+        run: |
+          python - <<'EOF'
+          from PIL import Image
+          Image.new("RGBA", (16, 16), (40, 160, 90, 255)).save("check.png")
+          EOF
+          xvfb-run -a dist/PixelForge --describe --result describe.json
+          cat describe.json
+          PIXEL_FORGE_HIDDEN=1 PIXEL_FORGE_TEST_ACTION=paint-save XDG_CONFIG_HOME="$PWD/check-config" \
+            xvfb-run -a -s "-screen 0 1280x800x24" dist/PixelForge --edit check.png --name "Check" --result result.json
+          cat result.json
+          python - <<'EOF'
+          import json
+          from PIL import Image
+          assert json.load(open("describe.json"))["protocol"] == 1
+          assert json.load(open("result.json"))["status"] == "saved"
+          img = Image.open("check.png").convert("RGBA")
+          assert img.getpixel((0, 0)) == (255, 0, 255, 255) and img.getpixel((5, 5)) == (40, 160, 90, 255)
+          print("the built app opened the texture, painted it and saved it")
+          EOF
+
+      - name: A screenshot of the built app at the Steam Deck's size
+        run: |
+          XDG_CONFIG_HOME="$PWD/shot-config" xvfb-run -a -s "-screen 0 1280x800x24" bash -c '
+            dist/PixelForge Test/5d5f9f76-74e2-4bc5-82f5-c03a478fecbe.jpg &
+            sleep 12
+            python -c "from PIL import ImageGrab; ImageGrab.grab(xdisplay=\"$DISPLAY\").save(\"built-app-1280x800.png\")"
+            kill %1 || true
+          '
+
+      - name: Keep the built app and its screenshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: PixelForge-linux-x86_64
+          path: |
+            dist/PixelForge
+            built-app-1280x800.png
+
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp dist/PixelForge PixelForge-linux-x86_64
+          gh release create "$GITHUB_REF_NAME" PixelForge-linux-x86_64 \
+            --title "Pixel Forge $GITHUB_REF_NAME" \
+            --notes "Pixel Forge for Linux and the Steam Deck: one file, nothing to install. Download PixelForge-linux-x86_64, mark it as executable (in Dolphin: right-click, Properties, Permissions, 'Is executable') and run it. AI background removal is not included in this build; everything else is. See the README for adding it to Steam."

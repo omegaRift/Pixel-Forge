@@ -18,6 +18,7 @@ from PIL import Image, ImageDraw, ImageTk
 
 from layers import (ADJUSTMENTS, BASE_NAME, LAYER_MODES, MAX_LAYERS, History, Layer, blank, composite, faded,
                     flood_fill, line_pixels, merge_down, merge_visible, resize_layers)
+from platform_support import MONO, bind_wheel
 from ui_widgets import ScrollArea, Tooltip
 
 # Theme colours (kept in sync with pixel_forge's palette)
@@ -128,7 +129,7 @@ class LayerEditorMixin:
         self.root.option_add("*TCombobox*Listbox.foreground", TEXT)
         self.root.option_add("*TCombobox*Listbox.selectBackground", ACCENT)
         # An on/off button (the Gradient blend toggle): accent when on.
-        s.configure("Toggle.Toolbutton", background=BORDER, foreground=TEXT, padding=(8, 3), font=("Consolas", 10),
+        s.configure("Toggle.Toolbutton", background=BORDER, foreground=TEXT, padding=(8, 3), font=(MONO, 10),
                     bordercolor=BORDER, lightcolor=BORDER, darkcolor=BORDER, focuscolor=BORDER)
         s.map("Toggle.Toolbutton", background=[("disabled", PANEL), ("selected", ACCENT), ("active", "#3b3b58")],
               foreground=[("disabled", "#55556b"), ("selected", BG)],
@@ -204,11 +205,11 @@ class LayerEditorMixin:
         row = ttk.Frame(self.layer_panel, style="Panel.TFrame")
         row.pack(fill="x")
         ttk.Label(row, text="Blend", width=8).pack(side="left")
-        self.blend_box = ttk.Combobox(row, values=LAYER_MODES, state="readonly", font=("Consolas", 10),
+        self.blend_box = ttk.Combobox(row, values=LAYER_MODES, state="readonly", font=(MONO, 10),
                                       width=max(len(m) for m in LAYER_MODES) + 1)  # room for the longest name
         self.blend_box.pack(side="left", fill="x", expand=True)
         self.blend_box.bind("<<ComboboxSelected>>", lambda e: self.set_blend_mode(self.blend_box.get()))
-        self.blend_box.bind("<MouseWheel>", lambda e: "break")  # don't change mode by scrolling past it
+        bind_wheel(self.blend_box, lambda e: "break")  # don't change mode by scrolling past it
         # Gradient blend on/off: the layer fades into the ones below (gradient_ui).
         self.grad_blend_var = tk.BooleanVar(value=False)
         self.blend_toggle = ttk.Checkbutton(row, text="Gradient", style="Toggle.Toolbutton",

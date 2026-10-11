@@ -1,3 +1,7 @@
+import sys
+if sys.platform != "win32":
+    print("SKIPPED: the taskbar and window-icon integration is Windows-only")
+    raise SystemExit(0)
 import ctypes, os, sys, time, uuid
 from ctypes import wintypes
 from pathlib import Path

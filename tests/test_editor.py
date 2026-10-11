@@ -1,44 +1,10 @@
-import ctypes, ctypes.wintypes as wt, os, shutil, sys, time
-from pathlib import Path
-from PIL import Image
-
-from _paths import APP, IMAGES, SCR, TESTS  # (this also puts the app on sys.path)
-os.environ["APPDATA"] = str(SCR / "appdata_editor")
-shutil.rmtree(os.environ["APPDATA"], ignore_errors=True)
-from _paths import APP, IMAGES, SCR, TESTS  # (this also puts the app on sys.path)
-import pixel_forge as pf
-import layers as L
-import tkinter as tk
-
-pf._windows_setup()
-root = tk.Tk(); root.withdraw()
-app = pf.PixelForgeApp(root)
-root.geometry("1140x800+40+40"); root.update_idletasks()
-hwnd = int(root.wm_frame(), 16); u32 = ctypes.windll.user32
-u32.SetWindowLongW(hwnd, -20, u32.GetWindowLongW(hwnd, -20) | 0x80000 | 0x20 | 0x08000000 | 0x80)
-u32.SetLayeredWindowAttributes(hwnd, 0, 0, 2); u32.ShowWindow(hwnd, 4)
+from harness import *  # the invisible app window: app, root, pump, capture, squashed, at, drag, find...
 
 
 def pump(sec=0.3):
     end = time.time() + sec
     while time.time() < end:
         root.update(); time.sleep(0.02)
-
-
-def capture(name):
-    root.update()
-    r = wt.RECT(); u32.GetWindowRect(hwnd, ctypes.byref(r))
-    w, h = r.right - r.left, r.bottom - r.top
-    g = ctypes.windll.gdi32
-    hdc = u32.GetWindowDC(hwnd); mdc = g.CreateCompatibleDC(hdc)
-    bmp = g.CreateCompatibleBitmap(hdc, w, h); g.SelectObject(mdc, bmp); u32.PrintWindow(hwnd, mdc, 2)
-    class BMI(ctypes.Structure):
-        _fields_ = [("a", wt.DWORD), ("w", wt.LONG), ("h", wt.LONG), ("p", wt.WORD), ("b", wt.WORD), ("c", wt.DWORD),
-                    ("s", wt.DWORD), ("x", wt.LONG), ("y", wt.LONG), ("u", wt.DWORD), ("i", wt.DWORD)]
-    buf = ctypes.create_string_buffer(w * h * 4)
-    g.GetDIBits(mdc, bmp, 0, h, buf, ctypes.byref(BMI(ctypes.sizeof(BMI), w, -h, 1, 32, 0, 0, 0, 0, 0, 0)), 0)
-    g.DeleteObject(bmp); g.DeleteDC(mdc); u32.ReleaseDC(hwnd, hdc)
-    Image.frombuffer("RGBA", (w, h), buf, "raw", "BGRA", 0, 1).convert("RGB").save(SCR / name)
 
 
 class Ev:

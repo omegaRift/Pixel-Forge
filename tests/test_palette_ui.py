@@ -83,25 +83,26 @@ print("\n".join(report)); assert all("nothing squashed" in r for r in report)
 root.geometry("1140x800+40+40"); pump()
 
 # 7. The library window itself (shown invisibly, captured, then hidden again)
-dlg.update_idletasks()
-dh = int(dlg.wm_frame(), 16)
-u32.SetWindowLongW(dh, -20, u32.GetWindowLongW(dh, -20) | 0x80000 | 0x20 | 0x08000000 | 0x80)
-u32.SetLayeredWindowAttributes(dh, 0, 0, 2); u32.ShowWindow(dh, 4); pump(0.5)
-r = wt.RECT(); u32.GetWindowRect(dh, ctypes.byref(r)); w, h = r.right - r.left, r.bottom - r.top
-g = ctypes.windll.gdi32; hdc = u32.GetWindowDC(dh); mdc = g.CreateCompatibleDC(hdc)
-bmp = g.CreateCompatibleBitmap(hdc, w, h); g.SelectObject(mdc, bmp); u32.PrintWindow(dh, mdc, 2)
-class BMI(ctypes.Structure):
-    _fields_ = [("a", wt.DWORD), ("w", wt.LONG), ("h", wt.LONG), ("p", wt.WORD), ("b", wt.WORD), ("c", wt.DWORD),
-                ("s", wt.DWORD), ("x", wt.LONG), ("y", wt.LONG), ("u", wt.DWORD), ("i", wt.DWORD)]
-buf = ctypes.create_string_buffer(w * h * 4)
-g.GetDIBits(mdc, bmp, 0, h, buf, ctypes.byref(BMI(ctypes.sizeof(BMI), w, -h, 1, 32, 0, 0, 0, 0, 0, 0)), 0)
-g.DeleteObject(bmp); g.DeleteDC(mdc); u32.ReleaseDC(dh, hdc)
-Image.frombuffer("RGBA", (w, h), buf, "raw", "BGRA", 0, 1).convert("RGB").save(OUT / "3_library.png")
-squashed_dlg = [f"{c.winfo_class()} '{c.cget('text')}' {c.winfo_width()} < {c.winfo_reqwidth()}"
-                for c in [b for b in app._lib_buttons.values()] if c.winfo_reqwidth() - c.winfo_width() > 2]
-assert not squashed_dlg, squashed_dlg
-dlg.withdraw()
-print("library window captured, buttons not squashed")
+if WINDOWS:  # (the screenshot of a second window uses Windows calls)
+    dlg.update_idletasks()
+    dh = int(dlg.wm_frame(), 16)
+    u32.SetWindowLongW(dh, -20, u32.GetWindowLongW(dh, -20) | 0x80000 | 0x20 | 0x08000000 | 0x80)
+    u32.SetLayeredWindowAttributes(dh, 0, 0, 2); u32.ShowWindow(dh, 4); pump(0.5)
+    r = wt.RECT(); u32.GetWindowRect(dh, ctypes.byref(r)); w, h = r.right - r.left, r.bottom - r.top
+    g = ctypes.windll.gdi32; hdc = u32.GetWindowDC(dh); mdc = g.CreateCompatibleDC(hdc)
+    bmp = g.CreateCompatibleBitmap(hdc, w, h); g.SelectObject(mdc, bmp); u32.PrintWindow(dh, mdc, 2)
+    class BMI(ctypes.Structure):
+        _fields_ = [("a", wt.DWORD), ("w", wt.LONG), ("h", wt.LONG), ("p", wt.WORD), ("b", wt.WORD), ("c", wt.DWORD),
+                    ("s", wt.DWORD), ("x", wt.LONG), ("y", wt.LONG), ("u", wt.DWORD), ("i", wt.DWORD)]
+    buf = ctypes.create_string_buffer(w * h * 4)
+    g.GetDIBits(mdc, bmp, 0, h, buf, ctypes.byref(BMI(ctypes.sizeof(BMI), w, -h, 1, 32, 0, 0, 0, 0, 0, 0)), 0)
+    g.DeleteObject(bmp); g.DeleteDC(mdc); u32.ReleaseDC(dh, hdc)
+    Image.frombuffer("RGBA", (w, h), buf, "raw", "BGRA", 0, 1).convert("RGB").save(OUT / "3_library.png")
+    squashed_dlg = [f"{c.winfo_class()} '{c.cget('text')}' {c.winfo_width()} < {c.winfo_reqwidth()}"
+                    for c in [b for b in app._lib_buttons.values()] if c.winfo_reqwidth() - c.winfo_width() > 2]
+    assert not squashed_dlg, squashed_dlg
+    dlg.withdraw()
+    print("library window captured, buttons not squashed")
 
 # 8. Rename and delete (from the library window)
 ask["name"] = "Crimson Axe"; app._lib_rename(); pump()

@@ -6,3 +6,8 @@ Pixel Forge.exe
 launcher_path.cs
 # Windows shortcuts point at this PC's paths
 *.lnk
+# the Linux one-file build (PyInstaller, see .github/workflows/linux.yml)
+build/
+dist/
+build-fonts/
+*.spec

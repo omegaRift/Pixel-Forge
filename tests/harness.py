@@ -40,19 +40,27 @@ import layers as L  # noqa: E402
 import tkinter as tk  # noqa: E402
 from tkinter import ttk  # noqa: E402
 
+WINDOWS = sys.platform == "win32"
 pf._windows_setup()
 root = tk.Tk()
 root.withdraw()
 app = pf.PixelForgeApp(root)
 root.geometry("1140x800+40+40")
 root.update_idletasks()
-hwnd = int(root.wm_frame(), 16)
-u32 = ctypes.windll.user32
-# Layered + transparent to clicks + never activated + no taskbar button, at alpha 0:
-# a real, laid-out window that PrintWindow can capture and nobody can see.
-u32.SetWindowLongW(hwnd, -20, u32.GetWindowLongW(hwnd, -20) | 0x80000 | 0x20 | 0x08000000 | 0x80)
-u32.SetLayeredWindowAttributes(hwnd, 0, 0, 2)
-u32.ShowWindow(hwnd, 4)  # SW_SHOWNOACTIVATE
+if WINDOWS:
+    hwnd = int(root.wm_frame(), 16)
+    u32 = ctypes.windll.user32
+    # Layered + transparent to clicks + never activated + no taskbar button, at alpha 0:
+    # a real, laid-out window that PrintWindow can capture and nobody can see.
+    u32.SetWindowLongW(hwnd, -20, u32.GetWindowLongW(hwnd, -20) | 0x80000 | 0x20 | 0x08000000 | 0x80)
+    u32.SetLayeredWindowAttributes(hwnd, 0, 0, 2)
+    u32.ShowWindow(hwnd, 4)  # SW_SHOWNOACTIVATE
+else:
+    # Linux: run the tests on a virtual screen (xvfb-run), where an ordinary
+    # window is on nobody's display.
+    hwnd = u32 = None
+    root.deiconify()
+    root.update()
 
 
 def pump(sec=0.3):
@@ -64,6 +72,12 @@ def pump(sec=0.3):
 
 def capture(name):
     root.update()
+    if not WINDOWS:  # straight off the (virtual) X screen
+        from PIL import ImageGrab
+        x, y = root.winfo_rootx(), root.winfo_rooty()
+        box = (x, y, x + root.winfo_width(), y + root.winfo_height())
+        ImageGrab.grab(bbox=box, xdisplay=os.environ.get("DISPLAY")).convert("RGB").save(OUT / name)
+        return
     r = wt.RECT()
     u32.GetWindowRect(hwnd, ctypes.byref(r))
     w, h = r.right - r.left, r.bottom - r.top

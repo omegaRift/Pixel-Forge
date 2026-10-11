@@ -56,6 +56,36 @@ Optional extras:
   you move the app folder.
 - **Web version:** `start-web.bat` runs a simpler converter in your browser (Streamlit).
 
+## Steam Deck and Linux
+
+There's a one-file version with Python included, so nothing needs installing:
+
+1. On the Deck, switch to **Desktop Mode** and open this repository's **Releases** page in
+   the browser. Download `PixelForge-linux-x86_64`.
+2. In the Dolphin file manager, right-click the file, choose **Properties → Permissions**
+   and tick **Is executable**. (In a terminal: `chmod +x PixelForge-linux-x86_64`.)
+3. Double-click it to run.
+
+To start it from Gaming Mode, add it to Steam: in Desktop Mode open Steam, choose
+**Games → Add a Non-Steam Game to My Library → Browse**, and pick the file. The window
+fits the Deck's 1280x800 screen. The trackpad moves the pointer, and Steam + X brings up
+the keyboard for names.
+
+Differences from the Windows version:
+
+- AI background removal isn't included (plain removal is).
+- Settings and the palette library are in `~/.config/PixelForge`.
+- Opening Pixel Forge from Grass Block is Windows-only.
+
+On any Linux PC you can also run it from source. It needs Python 3.10+ with Tk
+(`python3-tk` on Debian and Ubuntu, `tk` on Arch):
+
+```
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python pixel_forge.py
+```
+
 ## Using it
 
 1. **Open…** a picture (PNG or JPEG). A small square picture can be opened as it is

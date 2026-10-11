@@ -1,3 +1,7 @@
+import sys
+if sys.platform != "win32":
+    print("SKIPPED: this suite drives Windows-only window calls (the rest cover the same app on Linux)")
+    raise SystemExit(0)
 import ctypes, ctypes.wintypes as wt, json, sys, time
 from pathlib import Path
 from PIL import Image, ImageChops, ImageDraw

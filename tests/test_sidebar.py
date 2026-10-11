@@ -1,20 +1,5 @@
-import ctypes, os, shutil, sys, time
-from pathlib import Path
-
-from _paths import APP, IMAGES, SCR, TESTS  # (this also puts the app on sys.path)
-os.environ["APPDATA"] = str(SCR / "appdata_sidebar"); shutil.rmtree(os.environ["APPDATA"], ignore_errors=True)
-from _paths import APP, IMAGES, SCR, TESTS  # (this also puts the app on sys.path)
-import pixel_forge as pf
-import layers as L
-import tkinter as tk
-
-pf._windows_setup()
-root = tk.Tk(); root.withdraw()
-app = pf.PixelForgeApp(root)
-root.geometry("900x720+40+40"); root.update_idletasks()
-hwnd = int(root.wm_frame(), 16); u32 = ctypes.windll.user32
-u32.SetWindowLongW(hwnd, -20, u32.GetWindowLongW(hwnd, -20) | 0x80000 | 0x20 | 0x08000000 | 0x80)
-u32.SetLayeredWindowAttributes(hwnd, 0, 0, 2); u32.ShowWindow(hwnd, 4)
+from harness import *  # the invisible app window: app, root, pump, capture, squashed, at, drag, find...
+root.geometry("900x720+40+40"); root.update(); root.update_idletasks()
 
 
 def pump(sec=0.4):

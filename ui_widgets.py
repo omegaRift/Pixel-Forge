@@ -9,9 +9,11 @@ Small reusable Tk widgets for Pixel Forge's UI (no app logic):
 import tkinter as tk
 from tkinter import ttk
 
+from platform_support import MONO
+
 # Theme (kept in sync with pixel_forge's palette)
 BG, PANEL, BORDER, TEXT = "#12121c", "#1c1c2b", "#2e2e45", "#e8e8f0"
-FONT = ("Consolas", 10)
+FONT = (MONO, 10)
 
 
 class Tooltip:

@@ -2,7 +2,7 @@
 The palette library: colour palettes saved from textures, kept in a small
 SQLite database so any project (or Grass Block edit session) can open them.
 
-    %APPDATA%\\PixelForge\\palettes.db
+    %APPDATA%\\PixelForge\\palettes.db   (~/.config/PixelForge on Linux)
         palettes(id, name UNIQUE (any case), colours, source, created, updated)
 
 `colours` is a JSON list of "#rrggbbaa" strings, most-used first. No app
@@ -20,13 +20,14 @@ from pathlib import Path
 
 from PIL import Image
 
+from platform_support import config_dir
+
 MAX_COLOURS = 256  # a palette keeps at most this many (the most used)
 
 
 def default_path() -> Path:
     """Next to Pixel Forge's settings, in the user's own config folder."""
-    base = os.environ.get("APPDATA") or str(Path.home())
-    return Path(base) / "PixelForge" / "palettes.db"
+    return config_dir() / "palettes.db"
 
 
 @dataclass(frozen=True)
