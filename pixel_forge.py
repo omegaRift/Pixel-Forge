@@ -14,6 +14,7 @@ import os
 import re
 import sys
 import threading
+import time
 import traceback
 from pathlib import Path
 from tkinter import colorchooser, filedialog, messagebox
@@ -30,7 +31,8 @@ from palette_ui import PaletteLibraryMixin
 from projection_ui import ProjectionMixin
 from mc_preview import best_fit, pretty_name, render_inventory
 from ui_widgets import ScrollArea, Tooltip
-from pixel_core import (GRID_OPTIONS, PREVIEW_SIZE, ai_status, auto_line_color, find_subject,
+from waitbar import WaitBar
+from pixel_core import (GRID_OPTIONS, PREVIEW_SIZE, ai_model_loaded, ai_status, auto_line_color, find_subject,
                         pixelate_detailed, subject_is_cached)
 
 # --------------------------------------------------------------------------
@@ -62,6 +64,8 @@ APP_ID = "PixelForge.Desktop"                    # Windows taskbar identity
 FILE_TYPES = [("Images", "*.png *.jpg *.jpeg"), ("PNG", "*.png"), ("JPEG", "*.jpg *.jpeg")]
 AS_IS_TYPES = [("Images", "*.png *.gif *.bmp *.webp *.jpg *.jpeg"), ("PNG", "*.png"), ("All files", "*.*")]
 MAX_AS_IS = 256  # the biggest (square) picture Open As-Is takes, as Grass Block's textures
+CONVERT_S_PER_MP = 0.06   # converting takes about this long per megapixel (learnt as it goes)
+CONVERT_ON_THREAD = 0.3   # pictures expected to take longer convert on a thread, with a progress bar
 
 # A classic space invader, used for the window icon and the header logo.
 INVADER = [
@@ -176,6 +180,7 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, Projec
         self.bg_method = tk.StringVar(value="plain")  # "plain" flood fill or "ai" (rembg)
         self._ai_job = None                     # {"image", "done", "error"} while AI runs
         self._match_job = None                  # {"image", "key", "done", "result"} while matching
+        self._convert_job = None                # a big picture converting on a thread (see process)
         self._matched = None                    # (image, settings key, result) of the last match
         # "sprite" (Move tool), "edit" (paint tools) or "game" (Minecraft tab)
         self.view_var = tk.StringVar(value="sprite")
@@ -209,6 +214,10 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, Projec
         self._build_editor_ui()
         self._build_palette_library()
         self._build_projection_ui()
+        # Progress bars for waits, in place of the status line (waitbar.py)
+        self.waits = WaitBar(root, self.status_bar, covers=[self.status],
+                             times=self.settings.setdefault("wait_times", {}),
+                             save=lambda: save_settings(self.settings))
         self._bind_keys()
 
     # ---- theme -----------------------------------------------------------
@@ -318,8 +327,8 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, Projec
         end of the tab row (placed over the notebook's empty header space),
         so it never competes with a title for width."""
         self.status_full = "No image loaded."  # the status bar shows one line of this
-        status_bar = ttk.Frame(parent, style="Panel.TFrame", padding=(8, 4))
-        status_bar.pack(side="bottom", fill="x", pady=(8, 0))
+        status_bar = self.status_bar = ttk.Frame(parent, style="Panel.TFrame", padding=(8, 4))
+        status_bar.pack(side="bottom", fill="x", pady=(8, 0))  # (a progress bar takes its place while waiting)
         self.status = ttk.Label(status_bar, text=self.status_full, style="Muted.TLabel", anchor="w")
         self.status.pack(fill="x")
         self.status.bind("<Configure>", lambda e: self._fit_status())
@@ -686,7 +695,10 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, Projec
         img = self.original
         if self._ai_job and self._ai_job["image"] is img:
             return  # already working on this image
-        job = {"image": img, "done": threading.Event(), "error": None}
+        job = {"image": img, "done": threading.Event(), "error": None,
+               # (the first AI run in a session also loads the model: a different, longer kind of wait)
+               "wait": self.waits.begin("ai" if ai_model_loaded() else "ai_first",
+                                        "Removing the background with AI...")}
         self._ai_job = job
 
         def work():
@@ -711,6 +723,7 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, Projec
             return
         if self._ai_job is job:
             self._ai_job = None
+        job["wait"].end(record=not job["error"])
         if job["error"]:
             self.bg_method.set("plain")
             messagebox.showerror("Pixel Forge", f"AI background removal failed:\n\n{job['error']}")
@@ -1029,12 +1042,67 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, Projec
             # model loads): run it on a worker thread, then come back here.
             self._start_ai_job()
             return
+        if self._convert_job is not None:  # converting already: go again with these settings when it's done
+            self._convert_job["again"] = True
+            return
         settings = self._settings()
         if self._matched and self._matched[0] is self.original and self._matched[1] == self._key(settings):
-            result, matched = self._matched[2], True  # these exact settings were matched already
+            self._apply(self._matched[2], settings, True)  # these exact settings were matched already
+            return
+        megapixels = self.original.width * self.original.height / 1e6
+        expected = self.waits.times.get("convert_per_mp", CONVERT_S_PER_MP) * megapixels
+        if expected > CONVERT_ON_THREAD:  # a big picture: off the Tk loop, with a progress bar
+            self._convert_on_thread(settings, expected, megapixels)
+            return
+        started = time.perf_counter()
+        result = pixelate_detailed(self.original, **settings)
+        self._learn_convert_speed(time.perf_counter() - started, megapixels)
+        self._apply(result, settings, False)
+
+    def _learn_convert_speed(self, seconds: float, megapixels: float):
+        if megapixels >= 0.25:  # (tiny pictures say little about the speed)
+            self.waits.learn("convert_per_mp", seconds / megapixels)
+
+    def _convert_on_thread(self, settings: dict, expected: float, megapixels: float):
+        job = {"image": self.original, "settings": settings, "done": threading.Event(), "result": None,
+               "error": None, "again": False, "then": None, "seconds": 0.0,
+               "wait": self.waits.begin("convert", "Converting the image...", estimate=expected)}
+        self._convert_job = job
+
+        def work():
+            started = time.perf_counter()
+            try:
+                job["result"] = pixelate_detailed(job["image"], **job["settings"])
+            except Exception as exc:
+                job["error"] = exc
+            job["seconds"] = time.perf_counter() - started
+            job["done"].set()
+
+        threading.Thread(target=work, daemon=True).start()
+        self._poll_convert_job(job, megapixels)
+
+    def _poll_convert_job(self, job, megapixels):
+        if not job["done"].is_set():
+            self.root.after(50, lambda: self._poll_convert_job(job, megapixels))
+            return
+        self._convert_job = None
+        job["wait"].end(record=False)  # (its speed is learnt per megapixel, below)
+        if job["error"]:
+            messagebox.showerror("Pixel Forge", f"Converting the image failed:\n\n{job['error']}")
+            return
+        self._learn_convert_speed(job["seconds"], megapixels)
+        if job["image"] is not self.original:
+            return  # another picture was opened meanwhile
+        if job["again"] or self._key(self._settings()) != self._key(job["settings"]):
+            self.process()  # the settings changed while it worked: once more with the new ones
         else:
-            result, matched = pixelate_detailed(self.original, **settings), False
-        self._apply(result, settings, matched)
+            self._apply(job["result"], job["settings"], False)
+        if job["then"]:
+            job["then"]()
+
+    def busy(self) -> bool:
+        """Something is still working on a thread (tests wait for this)."""
+        return any((self._convert_job, self._ai_job, self._match_job, getattr(self, "_bg_job", None)))
 
     def _settings(self) -> dict:
         """Every pipeline option as currently set in the UI."""
@@ -1067,7 +1135,8 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, Projec
         key = self._key(settings)
         if self._matched and self._matched[0] is self.original and self._matched[1] == key:
             return  # already showing the match for these settings
-        job = {"image": self.original, "key": key, "done": threading.Event(), "result": None, "error": None}
+        job = {"image": self.original, "key": key, "done": threading.Event(), "result": None, "error": None,
+               "wait": self.waits.begin("match", "Matching the original...")}
         self._match_job = job
 
         def work():
@@ -1086,6 +1155,7 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, Projec
             self.root.after(50, lambda: self._poll_match_job(job))
             return
         self._match_job = None
+        job["wait"].end(record=not job["error"])
         if job["error"]:
             messagebox.showerror("Pixel Forge", f"Matching the original failed:\n\n{job['error']}")
         elif job["image"] is self.original:
@@ -1394,6 +1464,9 @@ def _test_action(app, action: str):
     (paint the top-left pixel magenta, then save), 'remove-bg-save' /
     'remove-bg-ai-save' (Remove BG Plain / AI on the texture, then save),
     'cancel'."""
+    if app.busy():  # a big picture still converting (or the AI working): act once it's done
+        app.root.after(100, lambda: _test_action(app, action))
+        return
     if action in ("remove-bg-save", "remove-bg-ai-save") and not app.texture_mode:
         app.session_save()  # Remove BG as a button is the texture panel's: converting has its own
         return

@@ -30,7 +30,7 @@ from tkinter import messagebox, ttk
 from PIL import Image, ImageChops
 
 from layers import Layer
-from pixel_core import ai_status, ai_subject, detect_subject
+from pixel_core import ai_model_loaded, ai_status, ai_subject, detect_subject
 from ui_widgets import Tooltip
 
 PROTOCOL = 1
@@ -367,6 +367,8 @@ class EditSessionMixin:
         for button in self.bg_buttons:
             button.configure(state="disabled")
         self._set_status("Removing the background with AI...")
+        job["wait"] = self.waits.begin("ai" if ai_model_loaded() else "ai_first",  # (progress bar)
+                                       "Removing the background with AI...")
         threading.Thread(target=work, daemon=True).start()
         self._poll_bg_job(job)
 
@@ -379,6 +381,8 @@ class EditSessionMixin:
 
     def _finish_bg_job(self, job):
         self._bg_job = None
+        if "wait" in job:
+            job["wait"].end(record=not job["error"])
         for button in self.bg_buttons:
             button.configure(state="normal")
         if job["error"]:
@@ -423,6 +427,10 @@ class EditSessionMixin:
 
     def session_save(self):
         path = Path(self.session["path"])
+        if self._convert_job is not None:  # a big picture still converting: save as soon as it's done
+            self._convert_job["then"] = self.session_save
+            self._set_status("Saving when the conversion is done...")
+            return
         art = self.display_art
         if art is None:  # converting: the art isn't made yet (the AI is still working)
             self._set_status("Nothing to save yet: wait for the art to appear, then Save & Return")

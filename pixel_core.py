@@ -536,6 +536,11 @@ def subject_is_cached(img: Image.Image, background: str) -> bool:
 _ai_session = None
 
 
+def ai_model_loaded() -> bool:
+    """The AI model is loaded already (the first AI run also loads it: slower)."""
+    return _ai_session is not None
+
+
 def ai_status() -> str | None:
     """None when AI removal is ready to use, otherwise why it isn't."""
     if importlib.util.find_spec("rembg") is None:
