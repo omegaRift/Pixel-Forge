@@ -80,6 +80,57 @@ jobs:
           print("the built app opened the texture, painted it and saved it")
           EOF
 
+      - name: Check the built app needs nothing installed (a bare Arch Linux, which SteamOS is built on)
+        run: |
+          python - <<'EOF'
+          from PIL import Image
+          Image.new("RGBA", (16, 16), (40, 160, 90, 255)).save("arch-check.png")
+          EOF
+          # Only a virtual screen is added to the bare system: no Python, no Tk, no fonts.
+          docker run --rm -v "$PWD:/w" -w /w archlinux:latest bash -c '
+            pacman -Syu --noconfirm --needed xorg-server-xvfb xorg-xauth > /dev/null 2>&1 || { echo "could not prepare the container"; exit 1; }
+            echo "python: $(command -v python || echo none)   fonts: $(ls /usr/share/fonts 2>/dev/null | wc -l)"
+            PIXEL_FORGE_HIDDEN=1 PIXEL_FORGE_TEST_ACTION=paint-save XDG_CONFIG_HOME=/tmp/cfg \
+              xvfb-run -a -s "-screen 0 1280x800x24" dist/PixelForge --edit arch-check.png --name Check --result arch-result.json
+            echo "exit code: $?"
+            cat arch-result.json'
+          python - <<'EOF'
+          import json
+          from PIL import Image
+          assert json.load(open("arch-result.json"))["status"] == "saved"
+          assert Image.open("arch-check.png").convert("RGBA").getpixel((0, 0)) == (255, 0, 255, 255)
+          print("on a bare Arch Linux the app opened the texture, painted it and saved it")
+          EOF
+
+      - name: Check the installer (install, start, uninstall; then from the published release)
+        env:
+          PF_TOKEN: ${{ github.token }}
+        run: |
+          export HOME="$PWD/install-home"
+          mkdir -p "$HOME/Desktop"
+          app="$HOME/.local/share/PixelForge/PixelForge"
+          PF_FILE=dist/PixelForge bash install.sh
+          test -x "$app"
+          test -L "$HOME/.local/bin/pixel-forge"
+          test -x "$HOME/Desktop/Pixel Forge.desktop"
+          grep -q "^Exec=\"$app\" %f$" "$HOME/.local/share/applications/pixel-forge.desktop"
+          xvfb-run -a "$HOME/.local/bin/pixel-forge" --describe > /dev/null
+          bash "$HOME/.local/share/PixelForge/install.sh" --uninstall
+          test ! -e "$app"
+          test ! -e "$HOME/.local/share/applications/pixel-forge.desktop"
+          test ! -e "$HOME/Desktop/Pixel Forge.desktop"
+          echo "installed from a file, started, and uninstalled cleanly"
+          # The download path, against the newest published release (if there is one yet)
+          if curl -fsS -o /dev/null -H "Authorization: Bearer $PF_TOKEN" "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/latest"; then
+            PF_REPO="$GITHUB_REPOSITORY" bash install.sh
+            test -x "$app"
+            test -f "$HOME/.local/share/PixelForge/pixel-forge.png"
+            xvfb-run -a "$app" --describe > /dev/null
+            echo "installed release $(cat "$HOME/.local/share/PixelForge/version") by download"
+            # without a token, a private repository says what to do instead of failing obscurely
+            if out="$(PF_TOKEN= GITHUB_TOKEN= PF_REPO="$GITHUB_REPOSITORY" bash install.sh 2>&1)"; then echo "(the repository is public: no token needed)"; else echo "$out" | grep -q "PF_TOKEN"; fi
+          fi
+
       - name: A screenshot of the built app at the Steam Deck's size
         run: |
           XDG_CONFIG_HOME="$PWD/shot-config" xvfb-run -a -s "-screen 0 1280x800x24" bash -c '

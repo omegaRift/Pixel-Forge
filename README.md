@@ -58,18 +58,53 @@ Optional extras:
 
 ## Steam Deck and Linux
 
-There's a one-file version with Python included, so nothing needs installing:
+The Linux version is one file with everything it runs on inside it: Python, the window
+toolkit, the image library and its font. Nothing else has to be installed, and nothing is
+installed system-wide, so SteamOS updates don't remove it.
 
-1. On the Deck, switch to **Desktop Mode** and open this repository's **Releases** page in
-   the browser. Download `PixelForge-linux-x86_64`.
-2. In the Dolphin file manager, right-click the file, choose **Properties → Permissions**
-   and tick **Is executable**. (In a terminal: `chmod +x PixelForge-linux-x86_64`.)
-3. Double-click it to run.
+### Install from Konsole
 
-To start it from Gaming Mode, add it to Steam: in Desktop Mode open Steam, choose
-**Games → Add a Non-Steam Game to My Library → Browse**, and pick the file. The window
-fits the Deck's 1280x800 screen. The trackpad moves the pointer, and Steam + X brings up
-the keyboard for names.
+This repository is private, so the download needs a GitHub token that can read it.
+
+**Once: make a token.** On github.com (the Deck's browser works), signed in as the
+repository's owner:
+
+1. Profile picture → **Settings** → **Developer settings** → **Personal access tokens** →
+   **Fine-grained tokens** → **Generate new token**.
+2. Give it a name and an expiry date. Under **Repository access** choose **Only select
+   repositories** and pick **Pixel-Forge**.
+3. Under **Permissions → Repository permissions**, set **Contents** to **Read-only**.
+4. **Generate token** and copy it (it starts with `github_pat_`). It can only read this
+   one repository.
+
+**Then, in Desktop Mode, open Konsole and paste these two commands** (Ctrl+Shift+V
+pastes). The first asks for the token; what you paste stays hidden:
+
+```
+read -rsp "GitHub token: " PF_TOKEN; echo
+```
+
+```
+curl -fsSL -H "Authorization: Bearer $PF_TOKEN" -H "Accept: application/vnd.github.raw" https://api.github.com/repos/omegaRift/Pixel-Forge/contents/install.sh | PF_TOKEN="$PF_TOKEN" bash
+```
+
+That downloads the newest release into `~/.local/share/PixelForge`, and adds **Pixel Forge**
+to the desktop and to the application menu (under Graphics). The token is only used for
+the download and is never saved.
+
+- **Update:** run the same two commands again.
+- **Remove:** `bash ~/.local/share/PixelForge/install.sh --uninstall` (your settings and
+  palettes are kept).
+- **Gaming Mode:** in Desktop Mode open Steam, choose **Games → Add a Non-Steam Game to My
+  Library**, and tick Pixel Forge. The window fits the Deck's 1280x800 screen. The trackpad
+  moves the pointer, and Steam + X brings up the keyboard for names.
+
+### Or by hand
+
+Download `PixelForge-linux-x86_64` from this repository's **Releases** page in the browser,
+then either run `PF_FILE=~/Downloads/PixelForge-linux-x86_64 bash install.sh` with a copy
+of [install.sh](install.sh), or just mark the file as executable (in Dolphin: right-click
+→ **Properties → Permissions → Is executable**) and double-click it.
 
 Differences from the Windows version:
 
