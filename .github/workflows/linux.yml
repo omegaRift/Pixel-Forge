@@ -61,9 +61,12 @@ jobs:
           EOF
           xvfb-run -a dist/PixelForge --describe --result describe.json
           cat describe.json
+          set +e   # show what the app says before failing
           PIXEL_FORGE_HIDDEN=1 PIXEL_FORGE_TEST_ACTION=paint-save XDG_CONFIG_HOME="$PWD/check-config" \
             xvfb-run -a -s "-screen 0 1280x800x24" dist/PixelForge --edit check.png --name "Check" --result result.json
+          echo "exit code: $?"
           cat result.json
+          set -e
           python - <<'EOF'
           import json
           from PIL import Image
