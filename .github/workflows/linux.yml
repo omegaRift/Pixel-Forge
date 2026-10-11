@@ -48,7 +48,10 @@ jobs:
         run: |
           mkdir -p build-fonts
           cp /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf /usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf build-fonts/
+          # (PIL._tkinter_finder is loaded only when the first picture is shown in Tk:
+          #  PyInstaller can't see that import, so it's named here)
           pyinstaller --noconfirm --onefile --windowed --name PixelForge \
+            --hidden-import PIL._tkinter_finder \
             --add-data "Forge.png:." --add-data "forge.ico:." --add-data "build-fonts:fonts" \
             pixel_forge.py
           ls -lh dist/PixelForge
