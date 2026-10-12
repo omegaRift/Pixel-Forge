@@ -88,7 +88,7 @@ else
         /"url": *"[^"]*\/releases\/assets\/[0-9]+"/ { url = $4 }
         /"name":/ && $4 == want { print url; exit }')"
     [ -n "$asset_url" ] || fail "Release ${version:-?} has no file called $ASSET."
-    say "Downloading Pixel Forge $version (about 36 MB)..."
+    say "Downloading Pixel Forge $version..."
     gh_curl -H "Accept: application/octet-stream" -o "$tmp/app" "$asset_url" || fail "The download failed. Try again."
 fi
 
