@@ -59,6 +59,20 @@ def config_dir() -> Path:
     return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "PixelForge"
 
 
+def data_dir() -> Path:
+    """Where Pixel Forge keeps big downloaded files (the AI model): next to the
+    installed app on Linux (~/.local/share/PixelForge), %LOCALAPPDATA%\\PixelForge
+    on Windows. PIXEL_FORGE_DATA_DIR overrides it (the tests use that)."""
+    override = os.environ.get("PIXEL_FORGE_DATA_DIR")
+    if override:
+        return Path(override)
+    if WINDOWS:
+        return Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "PixelForge"
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "PixelForge"
+    return Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "PixelForge"
+
+
 def open_folder(path) -> bool:
     """Show a folder in the system's file manager. False if that can't be done."""
     try:

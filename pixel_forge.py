@@ -24,6 +24,7 @@ from tkinter import ttk
 
 from PIL import Image, ImageTk
 
+import ai_model
 from edit_session import (DESCRIPTION, EXIT_ERROR, EditSessionMixin, parse_args, write_result)
 from editor_ui import LayerEditorMixin, checkerboard
 from gradient_ui import GradientMixin
@@ -183,6 +184,7 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, Projec
         self._ai_job = None                     # {"image", "done", "error"} while AI runs
         self._match_job = None                  # {"image", "key", "done", "result"} while matching
         self._convert_job = None                # a big picture converting on a thread (see process)
+        self._ai_download = None                # the AI model downloading (see _offer_ai_download)
         self._matched = None                    # (image, settings key, result) of the last match
         # "sprite" (Move tool), "edit" (paint tools) or "game" (Minecraft tab)
         self.view_var = tk.StringVar(value="sprite")
@@ -688,11 +690,57 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, Projec
             problem = ai_status()
             if problem:
                 self.bg_method.set("plain")
-                messagebox.showinfo("Pixel Forge", problem)
+                # Only the model missing? Offer to download it, then come back here.
+                if not self._offer_ai_download(lambda: (self.bg_method.set("ai"), self._on_bg_method())):
+                    messagebox.showinfo("Pixel Forge", problem)
                 return
             # Removing the background with AI usually means "I want it gone".
             self.transparent_var.set(True)
         self._settings_changed()
+
+    def _offer_ai_download(self, then) -> bool:
+        """AI removal can't run only because its model isn't on this computer
+        yet: offer the one-time download, with a progress bar, and call
+        then() once it's here. True if this dealt with it (the user was asked,
+        or a download is under way); False if there's nothing to offer."""
+        if self._ai_download is not None:
+            self._set_status("The AI model is still downloading...")
+            return True
+        if not ai_model.can_download() or self._session_quiet():
+            return False
+        if not messagebox.askyesno(
+                "Pixel Forge", "AI background removal needs its model first: a one-time download of "
+                               f"{ai_model.MODEL_MB} MB. After that it works without internet.\n\nDownload it now?"):
+            return True
+        job = {"done": threading.Event(), "error": None,
+               "wait": self.waits.begin("ai_download", "Downloading the AI model...")}
+        job["wait"].progress(0.0)
+        self._ai_download = job
+
+        def work():
+            try:
+                ai_model.download_model(progress=job["wait"].progress)
+            except ai_model.ModelError as exc:
+                job["error"] = str(exc)
+            except Exception as exc:  # anything else: still tell the user, in the window
+                job["error"] = f"The AI model couldn't be downloaded: {exc}"
+            job["done"].set()
+
+        threading.Thread(target=work, daemon=True).start()
+        self._poll_ai_download(job, then)
+        return True
+
+    def _poll_ai_download(self, job, then):
+        if not job["done"].is_set():
+            self.root.after(100, lambda: self._poll_ai_download(job, then))
+            return
+        self._ai_download = None
+        job["wait"].end(record=False)  # (it has real progress: no need to learn a typical time)
+        if job["error"]:
+            messagebox.showerror("Pixel Forge", job["error"])
+            return
+        self._set_status("The AI model is downloaded: AI background removal now works without internet.")
+        then()
 
     def _start_ai_job(self):
         img = self.original
@@ -1105,7 +1153,8 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, Projec
 
     def busy(self) -> bool:
         """Something is still working on a thread (tests wait for this)."""
-        return any((self._convert_job, self._ai_job, self._match_job, getattr(self, "_bg_job", None)))
+        return any((self._convert_job, self._ai_job, self._match_job, self._ai_download,
+                    getattr(self, "_bg_job", None)))
 
     def _settings(self) -> dict:
         """Every pipeline option as currently set in the UI."""
@@ -1495,6 +1544,33 @@ def _test_action(app, action: str):
         app.session_cancel()
 
 
+def download_ai_model_cli() -> int:
+    """--download-ai-model: fetch the AI model with no window, saying how it
+    goes (the Linux installer uses this). 0 if the model is here afterwards."""
+    say = print if sys.stdout else (lambda *a, **k: None)
+    if ai_model.model_file() is not None:
+        say(f"The AI model is already here: {ai_model.model_file()}")
+        return 0
+    if ai_model.engine() is None:
+        say(ai_status())
+        return 1
+    say(f"Downloading the AI background-removal model ({ai_model.MODEL_MB} MB, once)...")
+    shown = [-1]
+
+    def progress(fraction):
+        tenth = int(fraction * 10)
+        if tenth > shown[0]:
+            shown[0] = tenth
+            say(f"  {tenth * 10}%", flush=True)
+    try:
+        path = ai_model.download_model(progress=progress)
+    except ai_model.ModelError as exc:
+        say(str(exc))
+        return 1
+    say(f"The AI model is ready: {path}")
+    return 0
+
+
 def main():
     args = parse_args()
     if args.describe:  # the calling app asks what this Pixel Forge supports
@@ -1502,6 +1578,8 @@ def main():
         if sys.stdout:  # None under pythonw
             print(json.dumps(DESCRIPTION))
         sys.exit(0)
+    if args.download_ai_model:
+        sys.exit(download_ai_model_cli())
     hidden = os.environ.get("PIXEL_FORGE_HIDDEN") == "1"  # never shown: automated runs
     _windows_setup()
     root = tk.Tk()

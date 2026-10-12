@@ -59,8 +59,8 @@ Optional extras:
 ## Steam Deck and Linux
 
 The Linux version is one file with everything it runs on inside it: Python, the window
-toolkit, the image library and its font. Nothing else has to be installed, and nothing is
-installed system-wide, so SteamOS updates don't remove it.
+toolkit, the image library, the AI engine and its font. Nothing else has to be installed,
+and nothing is installed system-wide, so SteamOS updates don't remove it.
 
 ### Install from Konsole
 
@@ -77,22 +77,21 @@ repository's owner:
 4. **Generate token** and copy it (it starts with `github_pat_`). It can only read this
    one repository.
 
-**Then, in Desktop Mode, open Konsole and paste these two commands** (Ctrl+Shift+V
-pastes). The first asks for the token; what you paste stays hidden:
+**Then, in Desktop Mode, open Konsole and paste this one line** (Ctrl+Shift+V pastes).
+It asks for the token, and what you paste stays hidden:
 
 ```
-read -rsp "GitHub token: " PF_TOKEN; echo
-```
-
-```
-curl -fsSL -H "Authorization: Bearer $PF_TOKEN" -H "Accept: application/vnd.github.raw" https://api.github.com/repos/omegaRift/Pixel-Forge/contents/install.sh | PF_TOKEN="$PF_TOKEN" bash
+read -rsp "GitHub token: " T && echo && curl -fsSL -H "Authorization: Bearer $T" -H "Accept: application/vnd.github.raw" https://api.github.com/repos/omegaRift/Pixel-Forge/contents/install.sh | PF_TOKEN="$T" bash
 ```
 
 That downloads the newest release into `~/.local/share/PixelForge`, and adds **Pixel Forge**
 to the desktop and to the application menu (under Graphics). The token is only used for
 the download and is never saved.
 
-- **Update:** run the same two commands again.
+- **Update:** run the same line again.
+- **AI model now:** end the line with `PF_AI=1 bash` instead of `bash` to also download the
+  AI background-removal model (179 MB) straight away. Otherwise Pixel Forge offers it the
+  first time you choose AI removal.
 - **Remove:** `bash ~/.local/share/PixelForge/install.sh --uninstall` (your settings and
   palettes are kept).
 - **Gaming Mode:** in Desktop Mode open Steam, choose **Games → Add a Non-Steam Game to My
@@ -108,7 +107,9 @@ of [install.sh](install.sh), or just mark the file as executable (in Dolphin: ri
 
 Differences from the Windows version:
 
-- AI background removal isn't included (plain removal is).
+- AI background removal is built in, but its model (179 MB) is downloaded once: Pixel Forge
+  asks the first time you choose **Remove BG: AI**, shows the progress, and from then on it
+  works without internet. On the Deck a picture takes a few seconds.
 - Settings and the palette library are in `~/.config/PixelForge`.
 - Opening Pixel Forge from Grass Block is Windows-only.
 
@@ -120,6 +121,9 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 .venv/bin/python pixel_forge.py
 ```
+
+For AI background removal from source, also run
+`.venv/bin/pip install -r requirements-ai-lite.txt`; the app then offers to download the model.
 
 ## Using it
 
@@ -180,6 +184,9 @@ run only matching suites, for example `tests\run_all.py gradient`.
 | `palette_store.py` | The palette library (SQLite) |
 | `edit_session.py` | Being opened by another app (`--edit`), and opening as-is |
 | `waitbar.py`, `ui_widgets.py`, `mc_preview.py` | Progress bars, small widgets, the Minecraft preview |
+| `ai_model.py` | The AI model: downloading it once, and running it without rembg |
+| `platform_support.py` | What differs between Windows and Linux |
+| `install.sh`, `.github/workflows/linux.yml` | The Linux / Steam Deck installer, and the build that tests and packages it |
 | `launcher.cs` | Source of `Pixel Forge.exe` |
 | `app.py` | The Streamlit web version |
 | `tests/` | The test suites and their runner |

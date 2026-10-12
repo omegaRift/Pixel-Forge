@@ -1,0 +1,7 @@
+# AI background removal without rembg (see ai_model.py): just the network
+# runtime. The packaged Linux / Steam Deck app carries these; the 179 MB
+# model is downloaded once from inside the app.
+-r requirements.txt
+onnxruntime>=1.17
+numpy>=1.26
+certifi

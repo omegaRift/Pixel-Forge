@@ -1,18 +1,21 @@
 #!/usr/bin/env bash
 # Installs (or updates) Pixel Forge on Linux / a Steam Deck, for the current user.
 #
-#   In Konsole, with a GitHub token that can read this (private) repository:
+#   One line in Konsole. It asks for a GitHub token that can read this (private)
+#   repository; what you paste stays hidden:
 #
-#     read -rsp "GitHub token: " PF_TOKEN; echo
-#     curl -fsSL -H "Authorization: Bearer $PF_TOKEN" -H "Accept: application/vnd.github.raw" \
-#       https://api.github.com/repos/omegaRift/Pixel-Forge/contents/install.sh | PF_TOKEN="$PF_TOKEN" bash
+#     read -rsp "GitHub token: " T && echo && curl -fsSL -H "Authorization: Bearer $T" -H "Accept: application/vnd.github.raw" https://api.github.com/repos/omegaRift/Pixel-Forge/contents/install.sh | PF_TOKEN="$T" bash
 #
-# It downloads the newest release's one-file app (Python, Tk, Pillow and the
-# app's font are inside it: nothing else needs installing), puts it in your
-# home folder, and adds Pixel Forge to the application menu and the desktop.
-# Running it again updates. Nothing is installed system-wide, so SteamOS
-# updates don't remove it. The token is only used for the downloads; it is
-# never saved.
+# It downloads the newest release's one-file app (Python, Tk, Pillow, the AI
+# engine and the app's font are inside it: nothing else needs installing),
+# puts it in your home folder, and adds Pixel Forge to the application menu
+# and the desktop. Running it again updates. Nothing is installed
+# system-wide, so SteamOS updates don't remove it. The token is only used
+# for the downloads; it is never saved.
+#
+#   ... | PF_TOKEN="$T" PF_AI=1 bash
+#                                    also fetch the AI background-removal model now (179 MB);
+#                                    without this the app offers it the first time AI is used
 #
 #   bash ~/.local/share/PixelForge/install.sh --uninstall
 #                                    remove what this installed (your settings and palettes stay)
@@ -40,6 +43,8 @@ fail() { printf '[Pixel Forge] %s\n' "$*" >&2; exit 1; }
 
 if [ "${1:-}" = "--uninstall" ]; then
     rm -f "$APP" "$ICON" "$APP_DIR/version" "$APP_DIR/install.sh" "$MENU_ENTRY" "$DESKTOP_ENTRY" "$BIN_LINK"
+    rm -f "$APP_DIR/models/isnet-general-use.onnx" "$APP_DIR/models/isnet-general-use.onnx.part"   # the AI model, if downloaded
+    rmdir "$APP_DIR/models" 2>/dev/null || true
     rmdir "$APP_DIR" 2>/dev/null || true
     command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$MENU_DIR" >/dev/null 2>&1 || true
     say "Removed. Your settings and palettes are still in ${XDG_CONFIG_HOME:-$HOME/.config}/PixelForge."
@@ -131,6 +136,16 @@ fi
 command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$MENU_DIR" >/dev/null 2>&1 || true
 
 say "Installed Pixel Forge $version."
+
+# The AI background-removal model: big, so only now if asked for (PF_AI=1).
+# The app downloads it itself (--download-ai-model), and offers to on first use otherwise.
+if [ "${PF_AI:-}" = "1" ]; then
+    if "$APP" --download-ai-model; then
+        say "AI background removal is ready (it works without internet from now on)."
+    else
+        say "The AI model wasn't downloaded. Pixel Forge will offer it again the first time you choose AI removal."
+    fi
+fi
 say "  Start it:      the Pixel Forge icon on the desktop, or the application menu under Graphics"
 say "  Gaming Mode:   in Steam (Desktop Mode): Games > Add a Non-Steam Game > Pixel Forge"
 say "  Update later:  run the same install command again"

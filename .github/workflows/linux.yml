@@ -31,7 +31,7 @@ jobs:
           sudo apt-get install -y xvfb tk8.6 libtk8.6 fonts-dejavu-core
 
       - name: Python packages
-        run: python -m pip install -r requirements.txt pyinstaller
+        run: python -m pip install -r requirements-ai-lite.txt pyinstaller   # (Pillow + the small AI engine)
 
       - name: Tests, on a virtual screen
         run: xvfb-run -a -s "-screen 0 1600x1000x24" python tests/run_all.py
@@ -50,8 +50,10 @@ jobs:
           cp /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf /usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf build-fonts/
           # (PIL._tkinter_finder is loaded only when the first picture is shown in Tk:
           #  PyInstaller can't see that import, so it's named here)
+          # onnxruntime, numpy and certifi are imported only when AI removal is used (ai_model.py).
           pyinstaller --noconfirm --onefile --windowed --name PixelForge \
             --hidden-import PIL._tkinter_finder \
+            --hidden-import onnxruntime --hidden-import numpy --hidden-import certifi \
             --add-data "Forge.png:." --add-data "forge.ico:." --add-data "build-fonts:fonts" \
             pixel_forge.py
           ls -lh dist/PixelForge
@@ -102,6 +104,48 @@ jobs:
           print("on a bare Arch Linux the app opened the texture, painted it and saved it")
           EOF
 
+      - name: Remember the AI model between builds (179 MB)
+        uses: actions/cache@v4
+        with:
+          path: ai-data/PixelForge/models
+          key: isnet-general-use-60920e99
+
+      - name: Check AI background removal in the built app, on the bare Arch Linux
+        run: |
+          python - <<'EOF'
+          from PIL import Image
+          # A 256x256 texture cut from a test picture: an axe on a plain background
+          Image.open("Test/Gemini_Generated_Image_ds1uodds1uodds1u.jpg").convert("RGBA").resize((256, 256)).save("ai-check.png")
+          EOF
+          mkdir -p ai-data
+          docker run --rm -v "$PWD:/w" -w /w -e XDG_DATA_HOME=/w/ai-data archlinux:latest bash -c '
+            pacman -Syu --noconfirm --needed xorg-server-xvfb xorg-xauth > /dev/null 2>&1 || { echo "could not prepare the container"; exit 1; }
+            # 1. the app fetches its own model (over HTTPS, with the certificates it carries), unless a build before this one did
+            dist/PixelForge --download-ai-model || exit 1
+            ls -l ai-data/PixelForge/models/
+            # 2. AI Remove BG on the texture, then save
+            start=$(date +%s)
+            PIXEL_FORGE_HIDDEN=1 PIXEL_FORGE_TEST_ACTION=remove-bg-ai-save XDG_CONFIG_HOME=/tmp/cfg \
+              xvfb-run -a -s "-screen 0 1280x800x24" dist/PixelForge --edit ai-check.png --name Check --result ai-result.json
+            echo "exit code: $?  ($(( $(date +%s) - start )) s, with starting the app and loading the model)"
+            cat ai-result.json'
+          sudo chown -R "$USER" ai-data
+          python - <<'EOF'
+          import json
+          from PIL import Image
+          assert json.load(open("ai-result.json"))["status"] == "saved"
+          before = Image.open("Test/Gemini_Generated_Image_ds1uodds1uodds1u.jpg").convert("RGBA").resize((256, 256))
+          after = Image.open("ai-check.png").convert("RGBA")
+          alpha = after.getchannel("A")
+          cleared = sum(1 for a in alpha.tobytes() if a == 0)
+          kept = sum(1 for a in alpha.tobytes() if a == 255)
+          assert after.getpixel((2, 2))[3] == 0, "the corner is background: it should be see-through now"
+          assert cleared > 256 * 256 * 0.2 and kept > 256 * 256 * 0.05, (cleared, kept)
+          assert cleared + kept == 256 * 256, "hard edges: every pixel is kept whole or cleared"
+          print(f"AI removed the background in the built app: {cleared} pixels cleared, {kept} kept")
+          after.save("ai-check-result.png")
+          EOF
+
       - name: Check the installer (install, start, uninstall; then from the published release)
         env:
           PF_TOKEN: ${{ github.token }}
@@ -147,6 +191,7 @@ jobs:
           path: |
             dist/PixelForge
             built-app-1280x800.png
+            ai-check-result.png
 
       - name: Publish the release
         if: startsWith(github.ref, 'refs/tags/v')

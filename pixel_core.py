@@ -534,48 +534,61 @@ def subject_is_cached(img: Image.Image, background: str) -> bool:
 
 # ---- AI background removal (optional) --------------------------------------
 
-_ai_session = None
+_ai_session = None   # rembg's session, when rembg runs the model
+_ai_direct = None    # ai_model.Session, when onnxruntime runs it directly
 
 
 def ai_model_loaded() -> bool:
     """The AI model is loaded already (the first AI run also loads it: slower)."""
-    return _ai_session is not None
+    return _ai_session is not None or _ai_direct is not None
 
 
 def ai_status() -> str | None:
-    """None when AI removal is ready to use, otherwise why it isn't."""
-    if getattr(sys, "frozen", False) and importlib.util.find_spec("rembg") is None:
-        return "AI background removal isn't part of this build of Pixel Forge. Plain removal works as usual."
-    how = ("Run install-ai.bat once (needs internet)." if sys.platform == "win32" else
-           "Install it once with: pip install -r requirements-ai.txt (needs internet).")
-    if importlib.util.find_spec("rembg") is None:
+    """None when AI removal is ready to use, otherwise why it isn't. (When
+    only the model is missing, ai_model.can_download() is true and the app
+    offers to download it.)"""
+    import ai_model
+    engine = ai_model.engine()
+    if engine is None:
+        if getattr(sys, "frozen", False):
+            return "AI background removal isn't part of this build of Pixel Forge. Plain removal works as usual."
+        how = ("Run install-ai.bat once (needs internet)." if sys.platform == "win32" else
+               "Install it once with: pip install -r requirements-ai-lite.txt (needs internet).")
         return f"AI removal isn't installed. {how}"
-    if not AI_MODEL_FILE.exists():
-        return f"The AI model is missing. {how}"
+    if engine == "onnxruntime" and ai_model.model_file() is None:
+        return f"The AI model isn't downloaded yet (a one-time download of {ai_model.MODEL_MB} MB)."
     return None
 
 
 def ai_subject(img: Image.Image) -> Subject | None:
-    """Separate the subject with a neural network (rembg + ISNet), for
-    photos where there is no plain background to flood-fill.
+    """Separate the subject with a neural network (ISNet), for photos where
+    there is no plain background to flood-fill. The model runs through
+    rembg where that is installed, else directly on onnxruntime
+    (ai_model.Session: the same steps, the same result).
 
     Runs fully offline: the model is a local file, and this refuses to run
-    rather than let rembg download it.
+    rather than download it.
     """
     problem = ai_status()
     if problem:
         raise RuntimeError(problem)
-    global _ai_session
-    if _ai_session is None:
-        os.environ["U2NET_HOME"] = str(APP_DIR)  # where rembg looks for models
-        from rembg import new_session  # heavy import: only when AI is used
-        _ai_session = new_session(AI_MODEL)
-    from rembg import remove
+    import ai_model
+    global _ai_session, _ai_direct
 
     img = img.convert("RGBA")
     # The network works at 1024px internally; feeding it more is just slower.
     work = _to_work_size(img, 1024)
-    mask = remove(work.convert("RGB"), session=_ai_session, only_mask=True).convert("L")
+    if ai_model.engine() == "rembg":
+        if _ai_session is None:
+            os.environ["U2NET_HOME"] = str(APP_DIR)  # where rembg looks for models
+            from rembg import new_session  # heavy import: only when AI is used
+            _ai_session = new_session(AI_MODEL)
+        from rembg import remove
+        mask = remove(work.convert("RGB"), session=_ai_session, only_mask=True).convert("L")
+    else:
+        if _ai_direct is None:
+            _ai_direct = ai_model.Session()
+        mask = _ai_direct.mask(work.convert("RGB")).convert("L")
     mask = mask.resize(img.size, Image.Resampling.BILINEAR)
     # Keep any transparency the image already had.
     mask = ImageChops.darker(mask, img.getchannel("A"))
