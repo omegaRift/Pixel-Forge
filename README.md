@@ -73,7 +73,14 @@ curl -fsSL https://raw.githubusercontent.com/omegaRift/Pixel-Forge/main/install.
 That downloads the newest release into `~/.local/share/PixelForge`, and adds **Pixel Forge**
 to the desktop and to the application menu (under Graphics).
 
-- **Update:** run the same line again.
+- **Updates:** Pixel Forge updates itself. When it starts it looks for a newer version, and a
+  notification bar under the top bar tells you when there is one. With **Update automatically**
+  ticked (the default) the new version is downloaded and installed straight away, with a
+  progress bar, and the notification offers **Restart Now**; unticked, it offers **Update Now**
+  instead. **Check for Updates**, at the right end of the status bar, looks at any time.
+  Nothing restarts by itself: an installed update is used from the next start. (From Konsole:
+  `pixel-forge --update`; `pixel-forge --version` says which version you have. Running the
+  install line again also updates.)
 - **AI model now:** end the line with `PF_AI=1 bash` instead of `bash` to also download the
   AI background-removal model (179 MB) straight away. Otherwise Pixel Forge offers it the
   first time you choose AI removal.
@@ -170,6 +177,7 @@ run only matching suites, for example `tests\run_all.py gradient`.
 | `edit_session.py` | Being opened by another app (`--edit`), and opening as-is |
 | `waitbar.py`, `ui_widgets.py`, `mc_preview.py` | Progress bars, small widgets, the Minecraft preview |
 | `ai_model.py` | The AI model: downloading it once, and running it without rembg |
+| `updater.py`, `update_ui.py` | The installed Linux app updating itself: the work, and the notification bar |
 | `platform_support.py` | What differs between Windows and Linux |
 | `install.sh`, `.github/workflows/linux.yml` | The Linux / Steam Deck installer, and the build that tests and packages it |
 | `launcher.cs` | Source of `Pixel Forge.exe` |

@@ -98,11 +98,15 @@ def _ssl_context():
 
 
 def download_model(progress=None, url: str = MODEL_URL, target: Path | None = None,
-                   sha256: str | None = MODEL_SHA256, should_stop=None) -> Path:
+                   sha256: str | None = MODEL_SHA256, should_stop=None,
+                   what: str = "AI model", total: int = MODEL_BYTES) -> Path:
     """Download the model to `target` (default: download_target()), calling
     progress(0..1) as it goes. The file only appears under its real name
     once it is complete and its checksum matches. Raises ModelError, in
-    words, if it couldn't."""
+    words, if it couldn't.
+
+    The app's updater downloads with this too: `what` is the thing's name in
+    the messages, `total` its size if the server doesn't say."""
     target = Path(target) if target else download_target()
     part = target.with_name(target.name + ".part")
     digest, done = hashlib.sha256(), 0
@@ -110,7 +114,7 @@ def download_model(progress=None, url: str = MODEL_URL, target: Path | None = No
         target.parent.mkdir(parents=True, exist_ok=True)
         request = urllib.request.Request(url, headers={"User-Agent": "PixelForge"})
         with urllib.request.urlopen(request, context=_ssl_context(), timeout=30) as response, open(part, "wb") as out:
-            total = int(response.headers.get("Content-Length") or 0) or MODEL_BYTES
+            total = int(response.headers.get("Content-Length") or 0) or total
             while True:
                 if should_stop is not None and should_stop():
                     raise ModelError("The download was cancelled.")
@@ -128,11 +132,11 @@ def download_model(progress=None, url: str = MODEL_URL, target: Path | None = No
     except (urllib.error.URLError, OSError, ValueError) as exc:
         part.unlink(missing_ok=True)
         reason = getattr(exc, "reason", None) or exc
-        raise ModelError(f"The AI model couldn't be downloaded ({reason}). "
+        raise ModelError(f"The {what} couldn't be downloaded ({reason}). "
                          "Check the internet connection and try again.") from exc
     if sha256 and digest.hexdigest() != sha256:
         part.unlink(missing_ok=True)
-        raise ModelError("The downloaded AI model is damaged (it doesn't match the expected file). Try again.")
+        raise ModelError(f"The downloaded {what} is damaged (it doesn't match the expected file). Try again.")
     os.replace(part, target)
     return target
 

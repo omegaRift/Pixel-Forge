@@ -91,6 +91,9 @@ def parse_args(argv=None):
     p.add_argument("--describe", action="store_true", help="report the protocol version and exit")
     p.add_argument("--download-ai-model", action="store_true",
                    help="download the AI background-removal model (once, about 179 MB) and exit; no window")
+    p.add_argument("--update", action="store_true",
+                   help="install the newest version if there is one, and exit; no window (the installed Linux app)")
+    p.add_argument("--version", action="store_true", help="say which version this is and exit")
     args = p.parse_args(argv)
     if args.source and not args.edit:
         p.error("--source needs --edit (the texture to make)")

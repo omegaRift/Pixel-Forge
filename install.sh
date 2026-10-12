@@ -147,5 +147,5 @@ if [ "${PF_AI:-}" = "1" ]; then
 fi
 say "  Start it:      the Pixel Forge icon on the desktop, or the application menu under Graphics"
 say "  Gaming Mode:   in Steam (Desktop Mode): Games > Add a Non-Steam Game > Pixel Forge"
-say "  Update later:  run the same install command again"
+say "  Update later:  Pixel Forge updates itself, and tells you when it has (or run this install command again)"
 say "  Remove it:     bash \"$APP_DIR/install.sh\" --uninstall    (settings and palettes are kept)"

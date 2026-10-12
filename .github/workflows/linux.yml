@@ -33,6 +33,14 @@ jobs:
       - name: Python packages
         run: python -m pip install -r requirements-ai-lite.txt pyinstaller   # (Pillow + the small AI engine)
 
+      - name: A release's tag is the app's own version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          # (the app compares its version with the newest release's tag to know whether to update)
+          version="$(python -c 'import updater; print(updater.VERSION)')"
+          echo "the app says $version, the tag is $GITHUB_REF_NAME"
+          test "v$version" = "$GITHUB_REF_NAME"
+
       - name: Tests, on a virtual screen
         run: xvfb-run -a -s "-screen 0 1600x1000x24" python tests/run_all.py
 
@@ -187,7 +195,57 @@ jobs:
             if out="$(PF_TOKEN= GITHUB_TOKEN= PF_REPO="$GITHUB_REPOSITORY" bash install.sh 2>&1)"; then echo "(the repository is public: no token needed)"; else echo "$out" | grep -q "PF_TOKEN"; fi
           fi
 
+      - name: Check the built app updates itself and restarts (a pretend newer release, served from this machine)
+        run: |
+          export HOME="$PWD/update-home"
+          mkdir -p "$HOME/Desktop" serve
+          app="$HOME/.local/share/PixelForge/PixelForge"
+          PF_FILE=dist/PixelForge bash install.sh > /dev/null
+          # The "newer release": the same app file, said to be version 99.0.0
+          cp dist/PixelForge serve/PixelForge-linux-x86_64
+          python - <<'EOF'
+          import hashlib, json
+          data = open("serve/PixelForge-linux-x86_64", "rb").read()
+          json.dump({"tag_name": "v99.0.0", "assets": [{
+              "name": "PixelForge-linux-x86_64",
+              "browser_download_url": "http://127.0.0.1:8765/PixelForge-linux-x86_64",
+              "size": len(data), "digest": "sha256:" + hashlib.sha256(data).hexdigest()}]},
+              open("serve/latest.json", "w"))
+          EOF
+          python -m http.server 8765 --bind 127.0.0.1 --directory serve > /dev/null 2>&1 &
+          server=$!
+          sleep 1
+          export PIXEL_FORGE_UPDATE_API=http://127.0.0.1:8765/latest.json
+          "$app" --version
+          # 1. --update, with no window: the app's file is replaced by the download
+          before="$(stat -c %i "$app")"
+          "$app" --update
+          test "$(stat -c %i "$app")" != "$before"
+          cmp "$app" serve/PixelForge-linux-x86_64
+          test "$(cat "$HOME/.local/share/PixelForge/version")" = "v99.0.0"
+          "$app" --version
+          echo "--update replaced the app with the download, and it still starts"
+          # 2. In the window: found at startup, downloaded, installed, restarted - and the restarted app reports in
+          before="$(stat -c %i "$app")"
+          export PIXEL_FORGE_TEST_ACTION=update-restart PIXEL_FORGE_TEST_RESULT="$PWD/update-result.json"
+          XDG_CONFIG_HOME="$PWD/update-config" xvfb-run -a -s "-screen 0 1280x800x24" bash -c '
+            "$0" &
+            for i in $(seq 90); do [ -f "$PIXEL_FORGE_TEST_RESULT" ] && break; sleep 1; done
+            sleep 1' "$app"
+          kill $server
+          cat update-result.json; echo
+          test "$(stat -c %i "$app")" != "$before"
+          python - <<'EOF'
+          import json
+          result = json.load(open("update-result.json"))
+          assert result["status"] == "restarted" and result["from"] == result["version"], result
+          assert json.load(open("update-config/PixelForge/settings.json"))["updated_to"] == "99.0.0"
+          print("in the window: the update was installed, and the app it restarted is running")
+          EOF
+
       - name: A screenshot of the built app at the Steam Deck's size
+        env:
+          PIXEL_FORGE_UPDATE_API: http://127.0.0.1:9/none   # (the app looks for updates when it starts: not from here)
         run: |
           XDG_CONFIG_HOME="$PWD/shot-config" xvfb-run -a -s "-screen 0 1280x800x24" bash -c '
             dist/PixelForge Test/5d5f9f76-74e2-4bc5-82f5-c03a478fecbe.jpg &
@@ -213,4 +271,4 @@ jobs:
           cp dist/PixelForge PixelForge-linux-x86_64
           gh release create "$GITHUB_REF_NAME" PixelForge-linux-x86_64 \
             --title "Pixel Forge $GITHUB_REF_NAME" \
-            --notes "Pixel Forge for Linux and the Steam Deck: one file, nothing to install. Download PixelForge-linux-x86_64, mark it as executable (in Dolphin: right-click, Properties, Permissions, 'Is executable') and run it. AI background removal is built in; its model (179 MB) is downloaded once, the first time you use it, and then works offline. See the README for the one-line install from Konsole and for adding it to Steam."
+            --notes "Pixel Forge for Linux and the Steam Deck: one file, nothing to install. Download PixelForge-linux-x86_64, mark it as executable (in Dolphin: right-click, Properties, Permissions, 'Is executable') and run it. AI background removal is built in; its model (179 MB) is downloaded once, the first time you use it, and then works offline. The app updates itself: it tells you when a newer version is there. See the README for the one-line install from Konsole and for adding it to Steam."

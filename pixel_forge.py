@@ -25,6 +25,7 @@ from tkinter import ttk
 from PIL import Image, ImageTk
 
 import ai_model
+import updater
 from edit_session import (DESCRIPTION, EXIT_ERROR, EditSessionMixin, parse_args, write_result)
 from editor_ui import LayerEditorMixin, checkerboard
 from gradient_ui import GradientMixin
@@ -34,6 +35,7 @@ from platform_support import (MONO, bind_wheel, config_dir, fit_window, open_fol
 from projection_ui import ProjectionMixin
 from mc_preview import best_fit, pretty_name, render_inventory
 from ui_widgets import ScrollArea, Tooltip
+from update_ui import UpdateMixin
 from waitbar import WaitBar
 from pixel_core import (GRID_OPTIONS, PREVIEW_SIZE, ai_model_loaded, ai_status, auto_line_color, find_subject,
                         pixelate_detailed, subject_is_cached)
@@ -152,9 +154,10 @@ def texture_id(name: str) -> str:
 # The app
 # --------------------------------------------------------------------------
 
-class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, ProjectionMixin, LayerEditorMixin):
+class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, ProjectionMixin, UpdateMixin,
+                    LayerEditorMixin):
     # Edit view: editor_ui.py, gradients: gradient_ui.py, palette library: palette_ui.py,
-    # texture projection: projection_ui.py, --edit sessions: edit_session.py
+    # texture projection: projection_ui.py, --edit sessions: edit_session.py, updates: update_ui.py
     def __init__(self, root: tk.Tk):
         self.root = root
         self.original: Image.Image | None = None
@@ -219,11 +222,15 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, Projec
         self._build_editor_ui()
         self._build_palette_library()
         self._build_projection_ui()
+        self._build_update_ui()
         # Progress bars for waits, in place of the status line (waitbar.py)
         self.waits = WaitBar(root, self.status_bar, covers=[self.status],
                              times=self.settings.setdefault("wait_times", {}),
                              save=lambda: save_settings(self.settings))
         self._bind_keys()
+
+    def _save_settings(self):
+        save_settings(self.settings)
 
     # ---- theme -----------------------------------------------------------
 
@@ -1154,7 +1161,7 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, Projec
     def busy(self) -> bool:
         """Something is still working on a thread (tests wait for this)."""
         return any((self._convert_job, self._ai_job, self._match_job, self._ai_download,
-                    getattr(self, "_bg_job", None)))
+                    getattr(self, "_bg_job", None), self._update_job))
 
     def _settings(self) -> dict:
         """Every pipeline option as currently set in the UI."""
@@ -1571,6 +1578,59 @@ def download_ai_model_cli() -> int:
     return 0
 
 
+def update_cli() -> int:
+    """--update: install the newest version if there is one, with no window,
+    saying how it goes. 0 if this is the newest version afterwards."""
+    say = print if sys.stdout else (lambda *a, **k: None)
+    if not updater.supported():
+        say(f"This is Pixel Forge {updater.VERSION}. Only the installed Linux app updates itself: "
+            "this copy runs from its own folder.")
+        return 1
+    try:
+        release = updater.latest_release()
+        if not updater.is_newer(release.version):
+            say(f"Pixel Forge {updater.VERSION} is the newest version.")
+            return 0
+        say(f"Downloading Pixel Forge {release.version} (you have {updater.VERSION})...")
+        shown = [-1]
+
+        def progress(fraction):
+            tenth = int(fraction * 10)
+            if tenth > shown[0]:
+                shown[0] = tenth
+                say(f"  {tenth * 10}%", flush=True)
+        updater.install(release, progress=progress)
+    except updater.UpdateError as exc:
+        say(str(exc))
+        return 1
+    say(f"Pixel Forge {release.version} is installed. It is used the next time Pixel Forge starts.")
+    return 0
+
+
+def _test_update_restart(app):
+    """PIXEL_FORGE_TEST_ACTION=update-restart, for the build's own check of
+    the packaged app: update, restart, and have the restarted copy report
+    to PIXEL_FORGE_TEST_RESULT that it is running."""
+    result = os.environ.get("PIXEL_FORGE_TEST_RESULT")
+    if updater.updated_from():  # this is the copy the update started
+        write_result(result, {"status": "restarted", "from": updater.updated_from(), "version": updater.VERSION,
+                              "status_line": app.status_full})
+        app.root.destroy()
+        return
+    app.auto_update_var.set(True)
+    app.check_for_updates(quiet=True)
+
+    def when_done():
+        if app.busy():
+            app.root.after(100, when_done)
+        elif app._update_installed:
+            app.restart_app(ask=False)
+        else:
+            write_result(result, {"status": "error", "message": str(app.update_text.cget("text")) or "no update"})
+            app.root.destroy()
+    when_done()
+
+
 def main():
     args = parse_args()
     if args.describe:  # the calling app asks what this Pixel Forge supports
@@ -1580,6 +1640,12 @@ def main():
         sys.exit(0)
     if args.download_ai_model:
         sys.exit(download_ai_model_cli())
+    if args.version:
+        if sys.stdout:
+            print(f"Pixel Forge {updater.VERSION}")
+        sys.exit(0)
+    if args.update:
+        sys.exit(update_cli())
     hidden = os.environ.get("PIXEL_FORGE_HIDDEN") == "1"  # never shown: automated runs
     _windows_setup()
     root = tk.Tk()
@@ -1603,6 +1669,12 @@ def main():
                     root.after(200, lambda: _test_action(app, action))
         elif args.image:  # e.g. "Open with" or drag onto the launcher
             root.after(100, lambda: app.load_image(args.image))
+        # Updates: the installed app only, and never during another app's edit session
+        if not args.edit and os.environ.get("PIXEL_FORGE_TEST_ACTION") == "update-restart":
+            app.enable_updates(check=False)
+            root.after(200, lambda: _test_update_restart(app))
+        elif not args.edit and not hidden and updater.supported():
+            app.enable_updates()
         root.mainloop()
     except Exception:
         if args.edit:  # the caller is waiting: tell it, then fail
