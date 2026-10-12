@@ -1,21 +1,20 @@
 #!/usr/bin/env bash
 # Installs (or updates) Pixel Forge on Linux / a Steam Deck, for the current user.
 #
-#   One line in Konsole. It asks for a GitHub token that can read this (private)
-#   repository; what you paste stays hidden:
+#   One line in Konsole:
 #
-#     read -rsp "GitHub token: " T && echo && curl -fsSL -H "Authorization: Bearer $T" -H "Accept: application/vnd.github.raw" https://api.github.com/repos/omegaRift/Pixel-Forge/contents/install.sh | PF_TOKEN="$T" bash
+#     curl -fsSL https://raw.githubusercontent.com/omegaRift/Pixel-Forge/main/install.sh | bash
 #
 # It downloads the newest release's one-file app (Python, Tk, Pillow, the AI
 # engine and the app's font are inside it: nothing else needs installing),
 # puts it in your home folder, and adds Pixel Forge to the application menu
 # and the desktop. Running it again updates. Nothing is installed
-# system-wide, so SteamOS updates don't remove it. The token is only used
-# for the downloads; it is never saved.
+# system-wide, so SteamOS updates don't remove it.
 #
-#   ... | PF_TOKEN="$T" PF_AI=1 bash
-#                                    also fetch the AI background-removal model now (179 MB);
+#   ... | PF_AI=1 bash               also fetch the AI background-removal model now (179 MB);
 #                                    without this the app offers it the first time AI is used
+#   ... | PF_TOKEN=<token> bash      for a private copy of the repository (PF_REPO=owner/name):
+#                                    a GitHub token that can read its Contents; it is never saved
 #
 #   bash ~/.local/share/PixelForge/install.sh --uninstall
 #                                    remove what this installed (your settings and palettes stay)
@@ -76,7 +75,7 @@ else
     say "Looking up the newest release of $REPO..."
     if ! release="$(gh_curl -H "Accept: application/vnd.github+json" "$API/releases/latest")"; then
         if [ -z "$TOKEN" ]; then
-            fail "Couldn't read the releases. The repository is private: set PF_TOKEN to a GitHub token that can read it (see the README)."
+            fail "Couldn't read the releases. Check the internet connection and try again. (If $REPO is private, set PF_TOKEN to a GitHub token that can read it.)"
         fi
         fail "Couldn't read the releases. Check the token: it needs read access to the Contents of $REPO, and must not have expired."
     fi

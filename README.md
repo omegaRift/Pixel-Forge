@@ -64,29 +64,14 @@ and nothing is installed system-wide, so SteamOS updates don't remove it.
 
 ### Install from Konsole
 
-This repository is private, so the download needs a GitHub token that can read it.
-
-**Once: make a token.** On github.com (the Deck's browser works), signed in as the
-repository's owner:
-
-1. Profile picture → **Settings** → **Developer settings** → **Personal access tokens** →
-   **Fine-grained tokens** → **Generate new token**.
-2. Give it a name and an expiry date. Under **Repository access** choose **Only select
-   repositories** and pick **Pixel-Forge**.
-3. Under **Permissions → Repository permissions**, set **Contents** to **Read-only**.
-4. **Generate token** and copy it (it starts with `github_pat_`). It can only read this
-   one repository.
-
-**Then, in Desktop Mode, open Konsole and paste this one line** (Ctrl+Shift+V pastes).
-It asks for the token, and what you paste stays hidden:
+In Desktop Mode, open Konsole and paste this one line (Ctrl+Shift+V pastes):
 
 ```
-read -rsp "GitHub token: " T && echo && curl -fsSL -H "Authorization: Bearer $T" -H "Accept: application/vnd.github.raw" https://api.github.com/repos/omegaRift/Pixel-Forge/contents/install.sh | PF_TOKEN="$T" bash
+curl -fsSL https://raw.githubusercontent.com/omegaRift/Pixel-Forge/main/install.sh | bash
 ```
 
 That downloads the newest release into `~/.local/share/PixelForge`, and adds **Pixel Forge**
-to the desktop and to the application menu (under Graphics). The token is only used for
-the download and is never saved.
+to the desktop and to the application menu (under Graphics).
 
 - **Update:** run the same line again.
 - **AI model now:** end the line with `PF_AI=1 bash` instead of `bash` to also download the
