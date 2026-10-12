@@ -38,7 +38,12 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
         pass
 
 
-server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), partial(Quiet, directory=str(work / "served")))
+class Server(http.server.ThreadingHTTPServer):
+    def handle_error(self, request, client_address):
+        pass  # (a download this test cuts short: nothing to report, and nothing to print while Python closes)
+
+
+server = Server(("127.0.0.1", 0), partial(Quiet, directory=str(work / "served")))
 threading.Thread(target=server.serve_forever, daemon=True).start()
 url = f"http://127.0.0.1:{server.server_address[1]}/model.onnx"
 target = work / "data" / "models" / "isnet-general-use.onnx"

@@ -44,7 +44,12 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
         pass
 
 
-server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), partial(Quiet, directory=str(served)))
+class Server(http.server.ThreadingHTTPServer):
+    def handle_error(self, request, client_address):
+        pass  # (a download this test cuts short: nothing to report, and nothing to print while Python closes)
+
+
+server = Server(("127.0.0.1", 0), partial(Quiet, directory=str(served)))
 threading.Thread(target=server.serve_forever, daemon=True).start()
 base = f"http://127.0.0.1:{server.server_address[1]}"
 
@@ -118,6 +123,8 @@ try:
 except up.UpdateError as exc:
     assert "cancelled" in str(exc) and app_file.read_bytes() == b"\x7fELF the old app"
 print("a bad download (checksum, error page, cut short, missing, cancelled) leaves the app as it was")
+server.shutdown()   # (the rest needs no server: stop it before Python closes)
+server.server_close()
 
 # 5. Starting the new app: as its own program, without this one's unpacked files
 started = []
