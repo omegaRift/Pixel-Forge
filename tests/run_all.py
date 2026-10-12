@@ -38,7 +38,7 @@ def run(script: Path):
     out = (done.stdout or "") + (done.stderr or "")
     said = [line for line in (done.stdout or "").splitlines() if line.strip()]  # its own last word
     last = said[-1] if said else ""
-    if "SKIPPED" in out:
+    if done.returncode == 0 and last.startswith("SKIPPED"):  # (a suite that skipped only one part still passed)
         verdict = "skip"
     elif done.returncode == 0:
         verdict = "ok"
