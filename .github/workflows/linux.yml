@@ -90,7 +90,13 @@ jobs:
           EOF
           # Only a virtual screen is added to the bare system: no Python, no Tk, no fonts.
           docker run --rm -v "$PWD:/w" -w /w archlinux:latest bash -c '
-            pacman -Syu --noconfirm --needed xorg-server-xvfb xorg-xauth > /dev/null 2>&1 || { echo "could not prepare the container"; exit 1; }
+            # (the package mirrors fail now and then: try three times, and show why if they all do)
+            for attempt in 1 2 3; do
+              pacman -Syu --noconfirm --needed xorg-server-xvfb xorg-xauth > /tmp/pacman.log 2>&1 && break
+              echo "preparing the container failed (attempt $attempt):"; tail -n 6 /tmp/pacman.log
+              if [ "$attempt" = 3 ]; then exit 1; fi
+              sleep 15
+            done
             echo "python: $(command -v python || echo none)   fonts: $(ls /usr/share/fonts 2>/dev/null | wc -l)"
             PIXEL_FORGE_HIDDEN=1 PIXEL_FORGE_TEST_ACTION=paint-save XDG_CONFIG_HOME=/tmp/cfg \
               xvfb-run -a -s "-screen 0 1280x800x24" dist/PixelForge --edit arch-check.png --name Check --result arch-result.json
@@ -119,7 +125,13 @@ jobs:
           EOF
           mkdir -p ai-data
           docker run --rm -v "$PWD:/w" -w /w -e XDG_DATA_HOME=/w/ai-data archlinux:latest bash -c '
-            pacman -Syu --noconfirm --needed xorg-server-xvfb xorg-xauth > /dev/null 2>&1 || { echo "could not prepare the container"; exit 1; }
+            # (the package mirrors fail now and then: try three times, and show why if they all do)
+            for attempt in 1 2 3; do
+              pacman -Syu --noconfirm --needed xorg-server-xvfb xorg-xauth > /tmp/pacman.log 2>&1 && break
+              echo "preparing the container failed (attempt $attempt):"; tail -n 6 /tmp/pacman.log
+              if [ "$attempt" = 3 ]; then exit 1; fi
+              sleep 15
+            done
             # 1. the app fetches its own model (over HTTPS, with the certificates it carries), unless a build before this one did
             dist/PixelForge --download-ai-model || exit 1
             ls -l ai-data/PixelForge/models/
@@ -201,4 +213,4 @@ jobs:
           cp dist/PixelForge PixelForge-linux-x86_64
           gh release create "$GITHUB_REF_NAME" PixelForge-linux-x86_64 \
             --title "Pixel Forge $GITHUB_REF_NAME" \
-            --notes "Pixel Forge for Linux and the Steam Deck: one file, nothing to install. Download PixelForge-linux-x86_64, mark it as executable (in Dolphin: right-click, Properties, Permissions, 'Is executable') and run it. AI background removal is not included in this build; everything else is. See the README for adding it to Steam."
+            --notes "Pixel Forge for Linux and the Steam Deck: one file, nothing to install. Download PixelForge-linux-x86_64, mark it as executable (in Dolphin: right-click, Properties, Permissions, 'Is executable') and run it. AI background removal is built in; its model (179 MB) is downloaded once, the first time you use it, and then works offline. See the README for the one-line install from Konsole and for adding it to Steam."
