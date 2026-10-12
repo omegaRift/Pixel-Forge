@@ -26,14 +26,16 @@ BG, PANEL, BORDER, TEXT, MUTED, ACCENT, CYAN = (
     "#12121c", "#1c1c2b", "#2e2e45", "#e8e8f0", "#8a8aa3", "#ff3e7f", "#3ef0ff")
 # The left tool strip: (name, tool_var value, mouse cursor, shortcut key)
 TOOLS = (("Move", "move", "fleur", "M"), ("Pen", "pen", "pencil", "B"), ("Eraser", "eraser", "dotbox", "E"),
-         ("Fill", "fill", "spraycan", "G"), ("Gradient", "gradient", "tcross", "Shift+G"),
+         ("Fill", "fill", "spraycan", "G"), ("Erase Fill", "erase_fill", "X_cursor", "Shift+E"),
+         ("Gradient", "gradient", "tcross", "Shift+G"),
          ("Picker", "picker", "crosshair", "I"), ("Zoom", "zoom", "plus", "Z"))
-PAINT_TOOLS = {"pen", "eraser", "fill", "gradient", "picker"}  # the tools of Edit mode
+PAINT_TOOLS = {"pen", "eraser", "fill", "erase_fill", "gradient", "picker"}  # the tools of Edit mode
 TOOL_TIPS = {
     "move": "Move (M)\nDrag moves the subject in the grid, Ctrl+wheel scales it",
     "pen": "Pen (B)\nLeft click paints, right click erases",
     "eraser": "Eraser (E)",
-    "fill": "Fill (G)\nFills the connected area of one colour",
+    "fill": "Fill (G)\nFills the connected area of one colour  ·  right click erases it instead",
+    "erase_fill": "Erase Fill (Shift+E)\nErases the connected area of one colour on the layer you're on",
     "gradient": "Gradient (Shift+G)\nDrag across the sprite to add a gradient overlay layer;\n"
                 "drag again to re-aim it. Shift: 45° steps",
     "picker": "Picker (I)\nClick to take a colour from the sprite",
@@ -52,6 +54,9 @@ ICONS = {
                ".X...XX...", "..X.XX....", "...XX.....", "..........", "XXXXXXXXXX"],
     "fill": ["...XX.....", "..X..X....", ".X....X...", "XXXXXXXX..", ".XXXXXXXX.",
              "..XXXXXX.X", "...XXXX..X", "....XX...X", "........XX", "........X."],
+    # (the bucket, emptied, over the eraser's line)
+    "erase_fill": ["...XX.....", "..X..X....", ".X....X...", "XXXXXXXX..", ".X.....XX.",
+                   "..X...X...", "...X.X....", "....X.....", "..........", "XXXXXXXXXX"],
     "gradient": ["XXXXXXXXXX", "XXXX..X..X", "XXXXXX.X.X", "XXXX..X..X", "XXXXXX.X.X",
                  "XXXX..X..X", "XXXXXX.X.X", "XXXX..X..X", "XXXXXX.X.X", "XXXXXXXXXX"],
     "picker": [".......XX.", "......XXXX", ".....XXXXX", "......XXX.", ".....X.X..",
@@ -691,7 +696,9 @@ class LayerEditorMixin:
         p = self._pixel_at(event.x, event.y)
         if p is None:
             return
-        tool = "eraser" if erase else self.tool_var.get()
+        tool = self.tool_var.get()
+        if erase:  # right click: the fill tools erase an area, every other tool one pixel
+            tool = "erase_fill" if tool in ("fill", "erase_fill") else "eraser"
         if tool == "picker":
             colour = self.display_art.getpixel(p)
             if colour[3]:
@@ -701,12 +708,16 @@ class LayerEditorMixin:
         if not layer.visible:
             self._set_status(f"'{layer.name}' is hidden - show it (tick its box) to paint on it.")
             return
+        if tool == "erase_fill" and layer.gradient is None and layer.image.getpixel(p)[3] == 0:
+            self._set_status(f"Nothing to erase there on '{layer.name}'"
+                             + (": what you see is on another layer." if self.display_art.getpixel(p)[3] else "."))
+            return
         self._snapshot()
         if layer.gradient is not None:
             self._flatten_gradient(self.active_layer)  # paint on what it shows, as pixels
         self._freeze(layer)
-        if tool == "fill":
-            flood_fill(layer.image, *p, self.paint_colour)
+        if tool in ("fill", "erase_fill"):
+            flood_fill(layer.image, *p, (0, 0, 0, 0) if tool == "erase_fill" else self.paint_colour)
             self._layers_changed()
             return
         self._put(layer, p, tool == "eraser")

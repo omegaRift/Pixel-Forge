@@ -21,7 +21,7 @@ from pathlib import Path
 
 import ai_model
 
-VERSION = "1.2.0"   # this Pixel Forge. A release's tag must be "v" + this (the build checks it)
+VERSION = "1.3.0"   # this Pixel Forge. A release's tag must be "v" + this (the build checks it)
 REPO = "omegaRift/Pixel-Forge"
 ASSET = "PixelForge-linux-x86_64"   # the release file this app is
 API = f"https://api.github.com/repos/{REPO}/releases/latest"

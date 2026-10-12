@@ -634,8 +634,8 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, Projec
         self.root.bind("<Control-z>", lambda e: self._typing(e) or self.undo())
         self.root.bind("<Control-y>", lambda e: self._typing(e) or self.redo())
         self.root.bind("<Control-Z>", lambda e: self._typing(e) or self.redo())  # Ctrl+Shift+Z
-        for key, tool in (("m", "move"), ("b", "pen"), ("e", "eraser"), ("g", "fill"), ("G", "gradient"),
-                          ("i", "picker"), ("z", "zoom")):  # "G" is Shift+G
+        for key, tool in (("m", "move"), ("b", "pen"), ("e", "eraser"), ("g", "fill"), ("E", "erase_fill"),
+                          ("G", "gradient"), ("i", "picker"), ("z", "zoom")):  # "E", "G": with Shift
             self.root.bind(f"<KeyPress-{key}>", lambda e, t=tool: self._tool_key(e, t))
         # X swaps the gradient's colours (while the Gradient tool is picked).
         self.root.bind("<KeyPress-x>", lambda e: self._typing(e) or self.tool_var.get() != "gradient"

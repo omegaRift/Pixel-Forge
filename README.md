@@ -22,7 +22,8 @@ Everything runs on your own PC: no account, no API key, no internet after setup.
 
 **Edit it**
 
-- Pen, Eraser, Fill, Picker, Move and Zoom tools. Zoom goes from actual size up to 128x.
+- Pen, Eraser, Fill, Erase Fill (clears a whole area of one colour), Picker, Move and Zoom
+  tools. Zoom goes from actual size up to 128x.
 - Up to 8 layers with blend modes (Multiply, Overlay, Soft Light…), opacity, merge and
   undo/redo.
 - **Gradients:** a Gradient tool for editable gradient layers (linear or radial, stepped
@@ -132,7 +133,7 @@ For AI background removal from source, also run
 | Ctrl+O / Ctrl+Shift+O | Open a picture / open pixel art as it is |
 | Ctrl+S / Ctrl+Shift+S | Save Art / Save Sprite |
 | Ctrl+Z / Ctrl+Y | Undo / redo |
-| M, B, E, G, Shift+G, I, Z | Move, Pen, Eraser, Fill, Gradient, Picker, Zoom |
+| M, B, E, G, Shift+E, Shift+G, I, Z | Move, Pen, Eraser, Fill, Erase Fill, Gradient, Picker, Zoom |
 | Mouse wheel, middle-drag | Zoom, pan |
 | Ctrl+wheel, Ctrl+arrows, Ctrl+0 | Scale, nudge, reset the subject (Move tool) |
 | Ctrl+M | Match Original |

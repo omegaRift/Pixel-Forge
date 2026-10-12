@@ -16,11 +16,11 @@ axe = sorted(IMAGES.glob("Gemini*"))[1]
 app.load_image(axe); app.transparent_var.set(True); app._settings_changed(); pump()
 G = app.small_art.width
 
-# 1. Strip: 7 tools (with Gradient) + undo/redo, square, inside the 44 px column and its height
+# 1. Strip: 8 tools (with Erase Fill and Gradient) + undo/redo, square, inside the 44 px column and its height
 strip = app.toolbar
 assert strip is app.left_strip and strip.winfo_width() == 44
 buttons = [b for b in strip.winfo_children() if b.winfo_class() in ("TRadiobutton", "TButton")]
-assert len(buttons) == 9, len(buttons)
+assert len(buttons) == 10, len(buttons)
 for b in buttons:
     assert 30 <= b.winfo_width() <= 40 and 30 <= b.winfo_height() <= 40, (b.winfo_width(), b.winfo_height())
     assert b.winfo_x() >= 0 and b.winfo_x() + b.winfo_width() <= 44
