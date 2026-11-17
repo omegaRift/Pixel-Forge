@@ -114,6 +114,9 @@ class WaitBar:
     # ---- showing ---------------------------------------------------------------
 
     def _tick(self):
+        if not self.host.winfo_exists():  # its window was closed: nothing to show any more
+            self._ticking = False
+            return
         self._refresh()
         if self.waits:
             self.root.after(TICK_MS, self._tick)
@@ -121,6 +124,8 @@ class WaitBar:
             self._ticking = False
 
     def _refresh(self):
+        if not self.host.winfo_exists():
+            return
         now = time.monotonic()
         due = [w for w in self.waits if now - w.started >= SHOW_AFTER]
         if not due:

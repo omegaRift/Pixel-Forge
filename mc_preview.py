@@ -14,6 +14,8 @@ With less room the grid can show fewer columns/rows (a cropped view), so
 the icon can stay at a realistic size.
 """
 
+import re
+
 from PIL import Image, ImageDraw, ImageFont
 
 # Classic GUI colours
@@ -67,6 +69,12 @@ def best_fit(avail_w: int, avail_h: int, texture: int = 16) -> tuple[int, int, i
                 if layout_size(cols, rows)[1] * unit <= avail_h:
                     return scale, cols, rows
     return 1, MIN_COLS, MIN_ROWS
+
+
+def texture_id(name: str) -> str:
+    """'Flesh Axe' -> 'flesh_axe': the lowercase, underscore style
+    Minecraft uses for texture and item IDs."""
+    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_") or "item"
 
 
 def pretty_name(stem: str) -> str:

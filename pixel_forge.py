@@ -33,7 +33,8 @@ from palette_ui import PaletteLibraryMixin
 from platform_support import (MONO, bind_wheel, config_dir, fit_window, open_folder, use_bundled_fonts,
                               width_scale)
 from projection_ui import ProjectionMixin
-from mc_preview import best_fit, pretty_name, render_inventory
+from mc_preview import best_fit, pretty_name, render_inventory, texture_id  # (texture_id: pf.texture_id too)
+from batch_ui import BatchMixin
 from ui_widgets import ScrollArea, Tooltip
 from update_ui import UpdateMixin
 from waitbar import WaitBar
@@ -144,20 +145,15 @@ def load_icon_image(size: int) -> Image.Image | None:
     return None
 
 
-def texture_id(name: str) -> str:
-    """'Flesh Axe' -> 'flesh_axe': the lowercase, underscore style
-    Minecraft uses for texture and item IDs."""
-    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_") or "item"
-
-
 # --------------------------------------------------------------------------
 # The app
 # --------------------------------------------------------------------------
 
 class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, ProjectionMixin, UpdateMixin,
-                    LayerEditorMixin):
+                    BatchMixin, LayerEditorMixin):
     # Edit view: editor_ui.py, gradients: gradient_ui.py, palette library: palette_ui.py,
-    # texture projection: projection_ui.py, --edit sessions: edit_session.py, updates: update_ui.py
+    # texture projection: projection_ui.py, --edit sessions: edit_session.py, updates: update_ui.py,
+    # many pictures at once: batch_ui.py
     def __init__(self, root: tk.Tk):
         self.root = root
         self.original: Image.Image | None = None
@@ -223,6 +219,7 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, Projec
         self._build_palette_library()
         self._build_projection_ui()
         self._build_update_ui()
+        self._build_batch_ui()
         # Progress bars for waits, in place of the status line (waitbar.py)
         self.waits = WaitBar(root, self.status_bar, covers=[self.status],
                              times=self.settings.setdefault("wait_times", {}),
@@ -430,7 +427,8 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, Projec
         logo = load_icon_image(32)  # the anvil, same as the launcher and window icon
         self._logo = ImageTk.PhotoImage(logo) if logo else self._icon
         ttk.Label(bar, image=self._logo).pack(side="left", padx=(0, 6))
-        ttk.Label(bar, text="PIXEL FORGE", style="Head.TLabel").pack(side="left", padx=(0, 16))
+        self.wordmark = ttk.Label(bar, text="PIXEL FORGE", style="Head.TLabel")
+        self.wordmark.pack(side="left", padx=(0, 16))
 
         open_btn = ttk.Button(bar, text="Open...", style="Accent.TButton", width=8, command=self.open_dialog)
         open_btn.pack(side="left", padx=(0, 4))
@@ -462,7 +460,22 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, Projec
                               relief="flat", highlightthickness=1, highlightbackground=BORDER,
                               highlightcolor=ACCENT, font=FONT, width=12)
         name_entry.pack(side="left", fill="x", expand=True, ipady=3)
+        self.name_entry, self.open_btn = name_entry, open_btn
         self.item_name.trace_add("write", lambda *_: self._debounce("art", 60, self._draw_art))
+        name_entry.bind("<Configure>", lambda e: self._fit_top_bar(), add="+")  # (its width: the room left)
+
+    NAME_MIN = 90  # px: narrower than this, the Item name field gives way to the wordmark instead
+
+    def _fit_top_bar(self):
+        """In the smallest windows the PIXEL FORGE wordmark steps aside (the
+        anvil logo stays) rather than squash the Item name field. It comes
+        back as soon as there's room for both."""
+        entry, mark = self.name_entry.winfo_width(), self.wordmark
+        if mark.winfo_manager():
+            if 1 < entry < self.NAME_MIN:
+                mark.pack_forget()
+        elif entry > self.NAME_MIN + mark.winfo_reqwidth() + 16:
+            mark.pack(side="left", padx=(0, 16), before=self.open_btn)
 
     def _build_sidebar(self, parent):
         """The right sidebar (300 px), stacked like an image editor's panels:
@@ -568,7 +581,8 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, Projec
         """Mouse wheel over a scrolling sidebar area scrolls it. Other wheel
         uses (scaling the sprite on its canvas) have their own bindings."""
         widget = self.root.winfo_containing(event.x_root, event.y_root)
-        for area in (self.adjust_area, getattr(self, "layer_area", None), getattr(self, "_lib_area", None)):
+        for area in (self.adjust_area, getattr(self, "layer_area", None), getattr(self, "_lib_area", None),
+                     getattr(self, "_batch_area", None)):
             if area is not None and area.contains(widget):
                 area.scroll(-1 if event.delta > 0 else 1)
                 return
@@ -1161,7 +1175,7 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, Projec
     def busy(self) -> bool:
         """Something is still working on a thread (tests wait for this)."""
         return any((self._convert_job, self._ai_job, self._match_job, self._ai_download,
-                    getattr(self, "_bg_job", None), self._update_job))
+                    getattr(self, "_bg_job", None), self._update_job, self._batch_job))
 
     def _settings(self) -> dict:
         """Every pipeline option as currently set in the UI."""

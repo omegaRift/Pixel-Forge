@@ -48,6 +48,7 @@ def run(script: Path):
 
 
 def main():
+    sys.stdout.reconfigure(errors="replace")  # (a suite's output may hold what this console can't show)
     wanted = sys.argv[1:]
     suites = sorted(TESTS.glob("test_*.py")) + [TESTS / "layout_check.py"]
     if wanted:

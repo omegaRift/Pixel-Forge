@@ -19,6 +19,11 @@ Everything runs on your own PC: no account, no API key, no internet after setup.
 - Scale and move the subject inside the grid. **Match Original** re-fits the colours to
   the source.
 - A Minecraft tab shows the sprite as an item in an inventory.
+- **Batch:** Batch... (Ctrl+B) converts many pictures at once with the same settings and
+  saves each as its own sprite (and, if ticked, the enlarged art), named after the picture,
+  with a progress bar. **Remove backgrounds** (Plain or AI) clears every picture's
+  background, and **Match Original** then runs by itself on each one whose background was
+  removed. Double-click a picture to touch it up in the main window.
 
 **Edit it**
 
@@ -131,6 +136,7 @@ For AI background removal from source, also run
 | Keys | |
 |---|---|
 | Ctrl+O / Ctrl+Shift+O | Open a picture / open pixel art as it is |
+| Ctrl+B | Batch: convert many pictures at once |
 | Ctrl+S / Ctrl+Shift+S | Save Art / Save Sprite |
 | Ctrl+Z / Ctrl+Y | Undo / redo |
 | M, B, E, G, Shift+E, Shift+G, I, Z | Move, Pen, Eraser, Fill, Erase Fill, Gradient, Picker, Zoom |
@@ -179,6 +185,7 @@ run only matching suites, for example `tests\run_all.py gradient`.
 | `waitbar.py`, `ui_widgets.py`, `mc_preview.py` | Progress bars, small widgets, the Minecraft preview |
 | `ai_model.py` | The AI model: downloading it once, and running it without rembg |
 | `updater.py`, `update_ui.py` | The installed Linux app updating itself: the work, and the notification bar |
+| `batch_ui.py` | Converting many pictures at once (the Batch window) |
 | `platform_support.py` | What differs between Windows and Linux |
 | `install.sh`, `.github/workflows/linux.yml` | The Linux / Steam Deck installer, and the build that tests and packages it |
 | `launcher.cs` | Source of `Pixel Forge.exe` |

@@ -9,7 +9,9 @@ import importlib.util
 import io
 import os
 import sys
+import threading
 from collections import Counter, deque
+from contextlib import contextmanager
 from pathlib import Path
 from typing import NamedTuple
 
@@ -514,16 +516,42 @@ class Subject(NamedTuple):
 # Holding a reference to the image means `is` can't match a different image
 # that happens to reuse a freed object's id.
 _subject_cache: dict = {"image": None, "results": {}}
+_subject_lock = threading.Lock()   # (the window and its worker threads share the cache)
+_private = threading.local()       # see private_subjects()
 
 
 def find_subject(img: Image.Image, background: str = "plain") -> Subject | None:
     """detect_subject ("plain") or ai_subject ("ai"), cached per image."""
-    if _subject_cache["image"] is not img:
-        _subject_cache["image"], _subject_cache["results"] = img, {}
-    results = _subject_cache["results"]
-    if background not in results:
-        results[background] = ai_subject(img) if background == "ai" else detect_subject(img)
-    return results[background]
+    if getattr(_private, "on", False):  # a batch: its own cache on its own thread; the window's stays put
+        own = _private.cache
+        if own["image"] is not img:
+            own["image"], own["results"] = img, {}
+        if background not in own["results"]:
+            own["results"][background] = ai_subject(img) if background == "ai" else detect_subject(img)
+        return own["results"][background]
+    with _subject_lock:
+        if _subject_cache["image"] is not img:
+            _subject_cache["image"], _subject_cache["results"] = img, {}
+        results = _subject_cache["results"]  # this picture's own results, even if another one takes the cache
+        if background in results:
+            return results[background]
+    subject = ai_subject(img) if background == "ai" else detect_subject(img)
+    results[background] = subject
+    return subject
+
+
+@contextmanager
+def private_subjects():
+    """While this is open, on this thread, find_subject keeps its results in
+    a cache of this thread's own (dropped afterwards): a batch converts many
+    pictures - and can convert one twice without finding its subject again -
+    without pushing the window's picture (and its slow AI result) out of the
+    shared cache. Results are the same either way."""
+    _private.on, _private.cache = True, {"image": None, "results": {}}
+    try:
+        yield
+    finally:
+        _private.on, _private.cache = False, None
 
 
 def subject_is_cached(img: Image.Image, background: str) -> bool:
