@@ -56,7 +56,26 @@ app._on_drag_start(Ev(x=cx, y=cy)); app._on_drag_end(Ev(x=cx, y=cy)); pump()
 k1 = app.zoom
 assert k1 and k1 > fit_k and k1 in app.ZOOM_STEPS, (fit_k, k1)
 assert app._pixel_at(cx, cy) == (px_x, px_y), "same art pixel stays under the pointer"
-assert app._photos["art"].width() == G * k1, "whole-number NEAREST enlargement"
+# Whole-number NEAREST enlargement: the photo is exactly the on-screen part of the sprite enlarged
+# k1 times (whole art pixels; nothing off screen is enlarged), pixel for pixel
+ox1, oy1, _ = app._art_origin
+x0, y0 = max(0, -ox1 // k1), max(0, -oy1 // k1)
+x1, y1 = min(G, -(-(w + 1 - ox1) // k1)), min(G, -(-(h + 1 - oy1) // k1))
+photo = app._photos["art"]
+assert (photo.width(), photo.height()) == ((x1 - x0) * k1, (y1 - y0) * k1), "whole-number NEAREST enlargement"
+from PIL import ImageTk
+shown = ImageTk.getimage(photo).convert("RGB")
+big = app.display_art.resize((G * k1, G * k1), Image.Resampling.NEAREST)
+whole = pf.checkerboard(big.width, big.height, max(4, k1 // 2)).convert("RGBA")
+whole.alpha_composite(big)
+grid = Image.new("RGBA", whole.size, (0, 0, 0, 0))
+d = ImageDraw.Draw(grid)
+for i in range(1, G):
+    d.line([(i * k1, 0), (i * k1, whole.height)], fill=(255, 255, 255, 34))
+    d.line([(0, i * k1), (whole.width, i * k1)], fill=(255, 255, 255, 34))
+if app._art_mode == "edit" and k1 >= 6:  # (the Edit view draws faint pixel lines)
+    whole.alpha_composite(grid)
+assert shown.tobytes() == whole.crop((x0 * k1, y0 * k1, x1 * k1, y1 * k1)).convert("RGB").tobytes(), "crisp, exact"
 assert "(fit)" not in app.zoom_label.cget("text") and str(k1 * 100) in app.zoom_label.cget("text")
 print(f"zoom in: {fit_k * 100}% (fit) -> {k1 * 100}%, pixel {(px_x, px_y)} stayed under the pointer; label "
       f"{app.zoom_label.cget('text')!r}")

@@ -8,8 +8,10 @@ item icon 16. Everything is drawn from scratch with Pillow (no game files).
 
 The mock-up is drawn at "texture density": one GUI unit = texture_size/16
 pixels, so a 16x16 texture fills a slot pixel-for-pixel and a 32x32 one
-shows at double density like a high-res resource pack. The caller then
-enlarges it by a whole number with NEAREST, like the game's GUI scale.
+shows at double density like a high-res resource pack. A texture too big
+for the room (64x64, 128x128) is drawn at a lower density instead, its
+icon shrunk into the slot as the game shrinks it (fit_density). The caller
+then enlarges it by a whole number with NEAREST, like the game's GUI scale.
 With less room the grid can show fewer columns/rows (a cropped view), so
 the icon can stay at a realistic size.
 """
@@ -71,6 +73,17 @@ def best_fit(avail_w: int, avail_h: int, texture: int = 16) -> tuple[int, int, i
     return 1, MIN_COLS, MIN_ROWS
 
 
+def fit_density(avail_w: int, avail_h: int, texture: int = 16) -> int:
+    """Pixels per GUI unit to draw the mock-up at: the texture's own density
+    (texture/16) when the smallest layout fits the room at that density,
+    else the biggest one that fits (at least 1)."""
+    min_w, min_h = layout_size(MIN_COLS, MIN_ROWS)
+    density = max(1, texture // 16)
+    while density > 1 and (min_w * density > avail_w or min_h * density > avail_h):
+        density -= 1
+    return density
+
+
 def texture_id(name: str) -> str:
     """'Flesh Axe' -> 'flesh_axe': the lowercase, underscore style
     Minecraft uses for texture and item IDs."""
@@ -85,10 +98,11 @@ def pretty_name(stem: str) -> str:
 
 
 def render_inventory(sprite: Image.Image, name: str, tab_title: str = "Pixel Forge",
-                     cols: int = FULL_COLS, rows: int = FULL_ROWS) -> Image.Image:
-    """The mock-up, at texture density (see module docstring). `name` is
-    the item's tooltip; `tab_title` heads the creative tab."""
-    k = max(1, sprite.width // 16)  # pixels per GUI unit
+                     cols: int = FULL_COLS, rows: int = FULL_ROWS, density: int | None = None) -> Image.Image:
+    """The mock-up, at texture density (see module docstring), or at
+    `density` px per GUI unit (fit_density). `name` is the item's tooltip;
+    `tab_title` heads the creative tab."""
+    k = density or max(1, sprite.width // 16)  # pixels per GUI unit
     sprite = sprite.convert("RGBA").resize((16 * k, 16 * k), Image.Resampling.NEAREST)
 
     width, height = layout_size(cols, rows)

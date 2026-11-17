@@ -1,7 +1,8 @@
 """
 Layers for editing a sprite: blend modes, compositing, merging, painting
-helpers and undo history. Pure Pillow + Python (sprites are at most 32x32,
-so per-pixel loops are fast enough and keep the maths readable).
+helpers and undo history. Pure Pillow + Python (sprites are at most 128x128
+from the converter, 256x256 opened as they are, so per-pixel loops are fast
+enough and keep the maths readable).
 
 Compositing follows the W3C "Compositing and Blending" spec, the same model
 image editors use: each layer's colour is first mixed with what's below it
@@ -378,7 +379,7 @@ def merge_visible(layers: list[Layer]) -> list[Layer]:
 
 
 def resize_layers(layers: list[Layer], size: int) -> list[Layer]:
-    """Grid size changed (16 <-> 32): scale painted layers with NEAREST so
+    """Grid size changed (16, 32, 64, 128): scale painted layers with NEAREST so
     every pixel stays a hard-edged block; gradients are simply redrawn."""
     out = []
     for l in layers:

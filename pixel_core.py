@@ -21,7 +21,7 @@ from PIL import Image, ImageChops, ImageEnhance
 # Constants
 # --------------------------------------------------------------------------
 
-GRID_OPTIONS = {"16 x 16": 16, "32 x 32": 32}
+GRID_OPTIONS = {"16 x 16": 16, "32 x 32": 32, "64 x 64": 64, "128 x 128": 128}
 PREVIEW_SIZE = 512  # final upscaled output size, in pixels (square)
 
 OUTLINE_MODES = ("off", "outside", "inside")
@@ -119,7 +119,8 @@ def pixelate_detailed(
                      downscale, k-means palette, mild colour boost,
                      despeckle and pixel-perfect outline corners (see
                      _enhanced_downscale). Off = the classic pipeline.
-    match_source   - slower pass (~0.1s at 16x16, ~1s at 32x32) that
+    match_source   - slower pass (~0.1s at 16x16, ~1s at 32x32, a few
+                     seconds at 64x64, 10-20s at 128x128) that
                      re-colours the sprite to read as close to the source
                      as possible; same silhouette and colour count
                      (see _match_source)
@@ -809,7 +810,7 @@ def _subject_pipeline(img, subject, region, grid, colors, outline, detail, line_
 # --------------------------------------------------------------------------
 # Lines: silhouette outline + inner detail lines
 # --------------------------------------------------------------------------
-# All of this runs on the tiny grid x grid image (at most 32x32 = 1024
+# All of this runs on the small grid x grid image (at most 128x128 = 16384
 # pixels), so plain Python loops are fast enough and keep it readable.
 
 def _luma(rgb) -> float:

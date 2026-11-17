@@ -94,6 +94,36 @@ def checkerboard(w: int, h: int, cell: int) -> Image.Image:
     return small.resize((cols * cell, rows * cell), Image.Resampling.NEAREST).crop((0, 0, w, h))
 
 
+def enlarged_view(art: Image.Image, k: int, ox: int, oy: int, w: int, h: int,
+                  pixel_grid: bool = False) -> tuple[Image.Image, int, int]:
+    """The sprite enlarged k times over the checkerboard, as it shows on a
+    w x h canvas with its top-left corner at (ox, oy): (image, x, y).
+
+    Only the art pixels that are on the canvas are enlarged, so a big
+    sprite zoomed far in stays small and quick (a 128x128 sprite at 128x
+    would otherwise be a 16384 px square picture). Pixel for pixel the same
+    as enlarging all of it: the checkerboard keeps its phase. pixel_grid adds
+    the faint lines between art pixels."""
+    x0, y0 = max(0, -ox // k), max(0, -oy // k)
+    x1 = max(x0 + 1, min(art.width, -(-(w + 1 - ox) // k)))
+    y1 = max(y0 + 1, min(art.height, -(-(h + 1 - oy) // k)))
+    part = art.crop((x0, y0, x1, y1)).resize(((x1 - x0) * k, (y1 - y0) * k), Image.Resampling.NEAREST)
+    cell = max(4, k // 2)
+    sx, sy = x0 * k % (2 * cell), y0 * k % (2 * cell)  # where this part starts in the checkerboard's pattern
+    view = checkerboard(part.width + sx, part.height + sy, cell).crop(
+        (sx, sy, sx + part.width, sy + part.height)).convert("RGBA")
+    view.alpha_composite(part)
+    if pixel_grid:
+        lines = Image.new("RGBA", view.size, (0, 0, 0, 0))
+        d = ImageDraw.Draw(lines)
+        for i in range(max(1, x0), min(art.width, x1)):
+            d.line([((i - x0) * k, 0), ((i - x0) * k, view.height)], fill=(255, 255, 255, 34))
+        for i in range(max(1, y0), min(art.height, y1)):
+            d.line([(0, (i - y0) * k), (view.width, (i - y0) * k)], fill=(255, 255, 255, 34))
+        view.alpha_composite(lines)
+    return view, ox + x0 * k, oy + y0 * k
+
+
 class LayerEditorMixin:
     # ---- state -------------------------------------------------------------
 
@@ -767,16 +797,7 @@ class LayerEditorMixin:
         art = self.display_art
         g = art.width
         k, ox, oy = self._art_layout(g, w, h)  # fit or zoomed (+ pan), whole-number k
-        big = art.resize((g * k, g * k), Image.Resampling.NEAREST)
-        view = checkerboard(big.width, big.height, max(4, k // 2)).convert("RGBA")
-        view.alpha_composite(big)
-        if k >= 6:
-            grid = Image.new("RGBA", view.size, (0, 0, 0, 0))
-            d = ImageDraw.Draw(grid)
-            for i in range(1, g):
-                d.line([(i * k, 0), (i * k, view.height)], fill=(255, 255, 255, 34))
-                d.line([(0, i * k), (view.width, i * k)], fill=(255, 255, 255, 34))
-            view.alpha_composite(grid)
+        view, vx, vy = enlarged_view(art, k, ox, oy, w, h, pixel_grid=k >= 6)  # (only what's on screen)
         self._art_origin = (ox, oy, k)
-        self._show("art", c, view, ox, oy)
+        self._show("art", c, view, vx, vy)
         self._draw_gradient_guide(c)

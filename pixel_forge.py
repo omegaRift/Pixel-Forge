@@ -27,13 +27,13 @@ from PIL import Image, ImageTk
 import ai_model
 import updater
 from edit_session import (DESCRIPTION, EXIT_ERROR, EditSessionMixin, parse_args, write_result)
-from editor_ui import LayerEditorMixin, checkerboard
+from editor_ui import LayerEditorMixin, checkerboard, enlarged_view
 from gradient_ui import GradientMixin
 from palette_ui import PaletteLibraryMixin
 from platform_support import (MONO, bind_wheel, config_dir, fit_window, open_folder, use_bundled_fonts,
                               width_scale)
 from projection_ui import ProjectionMixin
-from mc_preview import best_fit, pretty_name, render_inventory, texture_id  # (texture_id: pf.texture_id too)
+from mc_preview import best_fit, fit_density, pretty_name, render_inventory, texture_id  # (texture_id: pf.texture_id too)
 from batch_ui import BatchMixin
 from ui_widgets import ScrollArea, Tooltip
 from update_ui import UpdateMixin
@@ -516,7 +516,7 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, Projec
         ttk.Label(side, text="SPRITE", style="Head.TLabel").pack(anchor="w", pady=(0, 8))
         self.grid_title = ttk.Label(side, text="Grid Resolution")
         self.grid_title.pack(anchor="w")
-        self.grid_row = self._radio_row(side, self.grid_var, [(label, size) for label, size in GRID_OPTIONS.items()])
+        self.grid_row = self._radio_row(side, self.grid_var, list(GRID_OPTIONS.items()), per_row=2)
 
         # ttk.Scale is continuous; the handlers snap it to whole numbers.
         self.scale, self.colors_label = self._slider(side, "Color Palette Limit", 2, 64,
@@ -587,12 +587,16 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, Projec
                 area.scroll(-1 if event.delta > 0 else 1)
                 return
 
-    def _radio_row(self, parent, var, options):
+    def _radio_row(self, parent, var, options, per_row=None):
+        """A row of radio buttons; with per_row, that many to a line, in columns."""
         row = ttk.Frame(parent, style="Panel.TFrame")
         row.pack(fill="x", pady=(4, 0))
-        for label, value in options:
-            ttk.Radiobutton(row, text=label, value=value, variable=var,
-                            command=self._settings_changed).pack(side="left", padx=(0, 14))
+        for i, (label, value) in enumerate(options):
+            b = ttk.Radiobutton(row, text=label, value=value, variable=var, command=self._settings_changed)
+            if per_row:
+                b.grid(row=i // per_row, column=i % per_row, sticky="w", padx=(0, 14), pady=(0 if i < per_row else 2, 0))
+            else:
+                b.pack(side="left", padx=(0, 14))
         return row
 
     def _fix_grid(self, size: int):
@@ -1201,7 +1205,8 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, Projec
 
     def match_original(self):
         """Run the slower match-the-source pass for the current settings on
-        a worker thread (about 0.1 s at 16x16, up to ~1 s at 32x32)."""
+        a worker thread (about 0.1 s at 16x16, up to ~1 s at 32x32, a few
+        seconds at 64x64 and 10-20 s at 128x128, with the progress bar)."""
         if self.original is None or self.texture_mode or self._ai_job or self._match_job:
             return
         settings = self._settings()
@@ -1361,10 +1366,8 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, Projec
         k, ox, oy = self._art_layout(g, w, h)  # fit or zoomed (+ pan)
         self._art_k = k  # dragging converts mouse pixels to art pixels with this
         self._art_origin = (ox, oy, k)
-        big = art.resize((g * k, g * k), Image.Resampling.NEAREST)
-        view = checkerboard(big.width, big.height, max(4, k // 2)).convert("RGBA")
-        view.alpha_composite(big)
-        self._show("art", c, view, ox, oy)
+        view, vx, vy = enlarged_view(art, k, ox, oy, w, h)  # only the part that's on screen
+        self._show("art", c, view, vx, vy)
 
     def _draw_game(self):
         """The Minecraft tab: the sprite as an item (creative tab, slots,
@@ -1384,8 +1387,9 @@ class PixelForgeApp(EditSessionMixin, GradientMixin, PaletteLibraryMixin, Projec
         room = h - (34 if opaque else 0)  # leave space for the tip below
         # A whole-number GUI scale keeps it crisp; with little room the
         # inventory shows fewer columns/rows so the icon stays readable.
-        k, cols, rows = best_fit(w, room, art.width)
-        mock = render_inventory(art, self.item_name.get().strip() or "Item", cols=cols, rows=rows)
+        density = fit_density(w, room, art.width)  # a big texture shrinks into its slot if the tab is small, as in-game
+        k, cols, rows = best_fit(w, room, 16 * density)
+        mock = render_inventory(art, self.item_name.get().strip() or "Item", cols=cols, rows=rows, density=density)
         big = mock.resize((mock.width * k, mock.height * k), Image.Resampling.NEAREST)
         y = (room - big.height) // 2 + 1
         self._show("game", c, big, (w - big.width) // 2 + 1, y)

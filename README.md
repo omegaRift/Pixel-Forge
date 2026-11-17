@@ -1,7 +1,7 @@
 # Pixel Forge
 
-An offline desktop app that turns a picture into a 16x16 or 32x32 pixel-art
-sprite and lets you edit it with layers. It's made for Minecraft item and block
+An offline desktop app that turns a picture into a 16x16, 32x32, 64x64 or 128x128
+pixel-art sprite and lets you edit it with layers. It's made for Minecraft item and block
 textures, and it works for any small sprite.
 
 Everything runs on your own PC: no account, no API key, no internet after setup.
@@ -17,8 +17,10 @@ Everything runs on your own PC: no account, no API key, no internet after setup.
 - Limits the palette (2 to 64 colours), cleans up stray pixels, and draws an outline and
   detail lines so the result reads as pixel art, not a blurred photo.
 - Scale and move the subject inside the grid. **Match Original** re-fits the colours to
-  the source.
-- A Minecraft tab shows the sprite as an item in an inventory.
+  the source (a few seconds at 64x64, 10 to 20 at 128x128).
+- A Minecraft tab shows the sprite as an item in an inventory. A 64x64 or 128x128 texture
+  is shown shrunk into its slot when the tab is too small for it at full detail, as the game
+  shrinks a high-resolution icon.
 - **Batch:** Batch... (Ctrl+B) converts many pictures at once with the same settings and
   saves each as its own sprite (and, if ticked, the enlarged art), named after the picture,
   with a progress bar. **Remove backgrounds** (Plain or AI) clears every picture's
@@ -127,7 +129,8 @@ For AI background removal from source, also run
 
 1. **Open…** a picture (PNG or JPEG). A small square picture can be opened as it is
    instead of converted.
-2. Adjust the conversion in the right sidebar: grid size, colours, outline, background.
+2. Adjust the conversion in the right sidebar: grid size (16, 32, 64 or 128 pixels square),
+   colours, outline, background.
 3. Pick a tool on the left to edit. Layers are at the bottom of the sidebar.
 4. **Save Sprite** saves the sprite at its real size (for example `flesh_axe.png`, 16x16).
    **Save Art** saves an enlarged 512 px copy. Set an export folder in the top bar to save
