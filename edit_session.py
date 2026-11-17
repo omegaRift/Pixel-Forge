@@ -40,7 +40,9 @@ MIN_SIZE, MAX_SIZE = 8, 256   # square textures only, 8x8 .. 256x256 (protocol 1
 DESCRIPTION = {
     "app": "Pixel Forge",
     "protocol": PROTOCOL,
-    "modes": ["edit", "convert"],   # convert: --edit with --source (a new mode, not a protocol change)
+    # convert: --edit with --source (a new mode, not a protocol change).
+    # open / batch: pictures given with no option open for the user (one in the converter, several in Batch)
+    "modes": ["edit", "convert", "open", "batch"],
     "formats": ["png"],
     "texture": {"square": True, "min": MIN_SIZE, "max": MAX_SIZE},
     "exit_codes": {"saved": EXIT_SAVED, "cancelled": EXIT_CANCELLED, "error": EXIT_ERROR},
@@ -79,7 +81,8 @@ def _peek_result_path(argv):
 
 def parse_args(argv=None):
     p = _Parser(prog="Pixel Forge", description="Offline pixel art generator and editor.")
-    p.add_argument("image", nargs="?", help="an image to open (e.g. dropped on the launcher)")
+    p.add_argument("image", nargs="*",
+                   help="pictures to open (e.g. dropped on the launcher): one opens in the converter, several in Batch")
     p.add_argument("--edit", metavar="PNG", help="edit this texture for another app, then save it back")
     p.add_argument("--name", help="item name (shown in the Minecraft preview)")
     p.add_argument("--result", metavar="JSON", help="where to write the result for the calling app")

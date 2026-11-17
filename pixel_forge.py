@@ -1645,6 +1645,15 @@ def _test_update_restart(app):
     when_done()
 
 
+def open_given(app, paths) -> None:
+    """Pictures given on the command line ("Open with", dropped on the launcher, another app):
+    one opens in the converter, several open in the Batch window, ready to convert."""
+    if len(paths) == 1:
+        app.load_image(paths[0])
+    elif paths:
+        app.open_batch(list(paths))
+
+
 def main():
     args = parse_args()
     if args.describe:  # the calling app asks what this Pixel Forge supports
@@ -1681,8 +1690,8 @@ def main():
                 action = os.environ.get("PIXEL_FORGE_TEST_ACTION")
                 if action:
                     root.after(200, lambda: _test_action(app, action))
-        elif args.image:  # e.g. "Open with" or drag onto the launcher
-            root.after(100, lambda: app.load_image(args.image))
+        elif args.image:  # e.g. "Open with", drag onto the launcher, or Picture Scout's Send to Pixel Forge
+            root.after(100, lambda: open_given(app, args.image))
         # Updates: the installed app only, and never during another app's edit session
         if not args.edit and os.environ.get("PIXEL_FORGE_TEST_ACTION") == "update-restart":
             app.enable_updates(check=False)

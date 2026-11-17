@@ -58,6 +58,22 @@ half-write the real file.
 - Results and exit codes are as for editing.
 - Check that `"convert"` is in `modes` before offering it.
 
+## Open pictures for the user (modes `open` and `batch`)
+
+```
+"Pixel Forge.exe" <picture> [<picture> ...]
+```
+
+- No option starting with `--`, so the launcher starts Pixel Forge and returns at once (no waiting,
+  no result file). The user carries on in Pixel Forge; nothing comes back to the caller.
+- **One picture** opens in the pixel-art converter, as "Open with" and dropping it on the launcher do.
+- **Several pictures** open in the **Batch** window (Ctrl+B), listed and ready to convert together with
+  the sidebar's settings. Missing files are skipped.
+- Pictures are anything Pillow opens. The caller keeps the files where Pixel Forge can read them
+  while the user works (Picture Scout keeps them a week).
+- Check for `"batch"` in `modes` before passing several (added 2026-11-17 for Picture Scout's
+  "Send all to Pixel Forge"; an older Pixel Forge takes only one picture and refuses more).
+
 ## Ask what this Pixel Forge supports
 
 ```
@@ -67,7 +83,7 @@ half-write the real file.
 The command exits 0 at once and writes the description to the result file:
 
 ```json
-{"protocol": 1, "app": "Pixel Forge", "modes": ["edit", "convert"], "formats": ["png"],
+{"protocol": 1, "app": "Pixel Forge", "modes": ["edit", "convert", "open", "batch"], "formats": ["png"],
  "texture": {"square": true, "min": 8, "max": 256},
  "exit_codes": {"saved": 0, "cancelled": 10, "error": 1}}
 ```

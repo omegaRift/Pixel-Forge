@@ -328,4 +328,20 @@ for size in ("900x720", "1280x800"):
     assert not squashed(), (size, squashed())
 assert not errors, errors
 app.close_batch()
+
+# Pictures given on the command line (Picture Scout's "Send all to Pixel Forge"): several open in Batch,
+# one opens in the converter, as before. "open" and "batch" are listed in --describe.
+import edit_session
+assert edit_session.parse_args([str(pictures[0]), str(pictures[1])]).image == [str(pictures[0]), str(pictures[1])]
+assert edit_session.parse_args([str(pictures[0])]).image == [str(pictures[0])] and edit_session.parse_args([]).image == []
+assert {"open", "batch"} <= set(edit_session.DESCRIPTION["modes"]) and edit_session.DESCRIPTION["protocol"] == 1
+app.clear_batch()
+pf.open_given(app, [str(pictures[2]), str(pictures[3])]); pump(0.3)
+assert app._batch_open(), "several pictures: the Batch window opens"
+assert [i.path for i in app._batch_items] == [pictures[2], pictures[3]], app._batch_items
+app.close_batch(); app.clear_batch()
+pf.open_given(app, [str(pictures[0])]); pump(0.5)
+assert not app._batch_open() and app.original is not None and app.original is not main_image, "one picture: the converter"
+assert not errors, errors
+print("pictures from the command line: several open in Batch, one in the converter")
 print("ALL OK")
